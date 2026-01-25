@@ -24,7 +24,7 @@ app.use(express.static(__dirname));
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyCt5uBy9ORizLHv8IIU2Wx-byYJh1VaiX4');
-const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
 let tariffContext = '';
 let tariffLoaded = false;
