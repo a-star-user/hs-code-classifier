@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI-Powered HS Code Lookup for Indian Customs Tariff. Find accurate HS codes instantly with intelligent matching and detailed explanations.">
+    <title>HS Code Expert - AI-Powered Indian Customs Tariff Lookup</title>
+    <link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@400;700&family=League+Spartan:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #3b82f6;
+            --accent: #1e40af;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1f2937;
+            --light: #f9fafb;
+            --gray: #6b7280;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'League Spartan', sans-serif;
+            background: #ffffff;
+            color: var(--dark);
+            line-height: 1.9;
+            min-height: 100vh;
+            font-size: 16px;
+        }
+
+        /* Header Navigation */
+        header {
+            background: #ffffff;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        nav {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-family: 'Gabarito', sans-serif;
+            letter-spacing: -0.5px;
+        }
+
+        .logo svg {
+            width: 36px;
+            height: 36px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--dark);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+            font-family: 'League Spartan', sans-serif;
+            font-size: 0.95rem;
+            letter-spacing: 0.3px;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        /* Hero Section */
+        .hero {
+            width: 100%;
+            padding: 8rem 2rem 2.5rem;
+            text-align: center;
+            color: var(--dark);
+            background: transparent;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .hero h1 {
+            font-family: 'Gabarito', sans-serif;
+            font-size: clamp(2.5rem, 8vw, 3.5rem);
+            font-weight: 700;
+            margin-bottom: 0;
+            letter-spacing: -0.8px;
+            color: #0f172a;
+            line-height: 1.5;
+            text-transform: uppercase;
+            max-width: 100%;
+            width: 100%;
+        }
+
+        .hero p {
+            font-family: 'League Spartan', sans-serif;
+            font-size: clamp(1rem, 2vw, 1.125rem);
+            opacity: 0.7;
+            max-width: 900px;
+            margin: 0 auto 0;
+            font-weight: 400;
+            color: #475569;
+            line-height: 1.9;
+            letter-spacing: 0.3px;
+            display: block;
+            width: 100%;
+            padding: 0 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Search Box Container */
+        .search-container {
+            width: 100%;
+            padding: 1.5rem 2rem 6rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .search-box {
+            background: transparent;
+            border-radius: 16px;
+            padding: 3rem 2rem;
+            box-shadow: none;
+            animation: slideUp 0.6s ease;
+            border: none;
+            backdrop-filter: none;
+            width: 100%;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .search-title {
+            font-family: 'Gabarito', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 2rem;
+            line-height: 1.4;
+            letter-spacing: -0.3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 2rem;
+            width: 100%;
+        }
+
+        .input-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 1.25rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            line-height: 1.6;
+            font-family: 'League Spartan', sans-serif;
+            text-align: center;
+        }
+
+        textarea {
+            font-family: 'League Spartan', sans-serif;
+            width: 100%;
+            padding: 1.5rem;
+            font-size: 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-weight: 400;
+            resize: none;
+            height: 140px;
+            transition: all 0.3s ease;
+            color: #1e293b;
+            line-height: 1.8;
+            background: #f8fafc;
+            display: block;
+            margin: 0 auto;
+        }
+
+        textarea::placeholder {
+            color: #94a3b8;
+            font-weight: 400;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(212, 160, 23, 0.15);
+        }
+
+        .char-count {
+            position: absolute;
+            bottom: 10px;
+            right: 15px;
+            font-size: 0.85rem;
+            color: #9ca3af;
+            font-weight: 500;
+        }
+
+        .char-count.warning {
+            color: #D4A017;
+        }
+
+        .char-count.error {
+            color: var(--danger);
+        }
+
+        .btn-search {
+            font-family: 'League Spartan', sans-serif;
+            width: 100%;
+            padding: 1.375rem 2rem;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-transform: none;
+            letter-spacing: 0.5px;
+            margin-top: 3rem;
+            line-height: 1.6;
+            position: relative;
+            overflow: hidden;
+            display: block;
+        }
+
+        .btn-search:hover:not(:disabled) {
+            opacity: 0.95;
+        }
+
+        .btn-search:active:not(:disabled) {
+            transform: scale(0.98);
+            opacity: 0.9;
+        }
+
+        .btn-search:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Results Container */
+        .results-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 2rem 5rem;
+            display: none;
+            animation: slideUp 0.6s ease;
+        }
+
+        .results-container.active {
+            display: block;
+        }
+
+        /* Error Box */
+        .error-box {
+            background: linear-gradient(135deg, #fecaca, #fca5a5);
+            border: 2px solid var(--danger);
+            border-radius: 12px;
+            padding: 1.5rem;
+            color: #7f1d1d;
+            margin-top: 1.5rem;
+            display: none;
+            animation: slideUp 0.3s ease;
+        }
+
+        .error-box.active {
+            display: block;
+        }
+
+        .error-box strong {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            display: none;
+            animation: slideUp 0.3s ease;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #e5e7eb;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1.5rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        /* Primary Result Card */
+        .result-card {
+            background: transparent;
+            border-radius: 16px;
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            box-shadow: none;
+            border: none;
+        }
+
+        .primary-result {
+            background: transparent;
+            color: var(--dark);
+            text-align: center;
+            padding: 4rem 2rem;
+            border-radius: 16px;
+            margin-bottom: 3.5rem;
+            position: relative;
+            overflow: hidden;
+            border: none;
+            box-shadow: none;
+        }
+
+        .primary-result::before {
+            display: none;
+        }
+
+        .primary-result-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .hs-code-label {
+            font-family: 'League Spartan', sans-serif;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            opacity: 0.65;
+            margin-bottom: 1.5rem;
+            font-weight: 700;
+            color: #64748b;
+            line-height: 1.6;
+        }
+
+        .hs-code-value {
+            font-family: 'Gabarito', sans-serif;
+            font-size: 4rem;
+            font-weight: 700;
+            margin-bottom: 2.5rem;
+            letter-spacing: -1.2px;
+            color: var(--primary);
+            line-height: 1.1;
+            text-transform: uppercase;
+        }
+
+        .hs-code-description {
+            font-family: 'League Spartan', sans-serif;
+            font-size: 1.125rem;
+            opacity: 0.85;
+            font-weight: 400;
+            max-width: 700px;
+            margin: 0 auto 2rem;
+            line-height: 1.9;
+            color: #475569;
+            letter-spacing: 0.2px;
+            text-align: center;
+        }
+
+        .confidence-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            padding: 0.6rem 1.5rem;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            box-shadow: 0 4px 15px rgba(212, 160, 23, 0.25);
+            margin: 2rem 0;
+            letter-spacing: 0.3px;
+        }
+
+        /* Reasons Section */
+        .reasons-section {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-family: 'Gabarito', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            line-height: 1.4;
+            letter-spacing: -0.3px;
+            text-transform: uppercase;
+        }
+
+        .reason-item {
+            background: linear-gradient(135deg, #fefef9 0%, #fffbf5 100%);
+            border-left: 5px solid var(--primary);
+            padding: 2rem;
+            margin-bottom: 1.75rem;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+            border: 1px solid rgba(37, 99, 235, 0.1);
+        }
+
+        .reason-item:hover {
+            transform: translateX(8px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+        }
+
+        .reason-title {
+            font-family: 'Gabarito', sans-serif;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 0.75rem;
+            font-size: 1.1rem;
+            line-height: 1.4;
+            letter-spacing: -0.2px;
+            text-transform: uppercase;
+        }
+
+        .reason-text {
+            color: #475569;
+            font-size: 0.95rem;
+            line-height: 1.8;
+            letter-spacing: 0.2px;
+            font-family: 'League Spartan', sans-serif;
+        }
+
+        /* Related Codes */
+        .related-section {
+            margin-bottom: 2rem;
+        }
+
+        .related-codes {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .related-card {
+            background: transparent;
+            border: none;
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .related-card::before {
+            display: none;
+        }
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+        }
+
+        .related-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+        }
+
+        .related-code {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 0.75rem;
+        }
+
+        .related-description {
+            font-size: 0.95rem;
+            color: var(--gray);
+            line-height: 1.6;
+        }
+
+        /* Features Section */
+        .features-section {
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafb 100%);
+            padding: 7rem 2rem 6rem;
+            margin-top: 6rem;
+            border-top: 1px solid rgba(37, 99, 235, 0.08);
+        }
+
+        .features-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .features-title {
+            font-family: 'Gabarito', sans-serif;
+            font-size: 2.75rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 5.5rem;
+            color: var(--dark);
+            line-height: 1.3;
+            letter-spacing: -0.8px;
+            text-transform: uppercase;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2.5rem;
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            padding: 3rem 2.5rem;
+            background: white;
+            border-radius: 16px;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(37, 99, 235, 0.08);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 8px 25px rgba(212, 160, 23, 0.12);
+            border-color: var(--primary);
+        }
+
+        .feature-icon {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #ffffff 0%, #fffcf5 100%);
+            border-radius: 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(212, 160, 23, 0.1);
+        }
+        
+        .feature-icon::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(212, 160, 23, 0.02) 2px, rgba(212, 160, 23, 0.02) 4px),
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(212, 160, 23, 0.01) 2px, rgba(212, 160, 23, 0.01) 4px);
+            pointer-events: none;
+            border-radius: 20px;
+        }
+
+        .feature-card:hover .feature-icon {
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .feature-icon svg {
+            width: 55px;
+            height: 55px;
+            position: relative;
+            z-index: 1;
+            filter: none;
+        }
+
+        .feature-card h3 {
+            font-family: 'Gabarito', sans-serif;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            color: #0f172a;
+            font-weight: 700;
+            line-height: 1.4;
+            letter-spacing: -0.3px;
+            text-transform: uppercase;
+        }
+
+        .feature-card p {
+            font-family: 'League Spartan', sans-serif;
+            color: #64748b;
+            font-size: 0.95rem;
+            line-height: 1.8;
+            letter-spacing: 0.2px;
+            font-weight: 400;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--dark);
+            color: white;
+            text-align: center;
+            padding: 2.5rem;
+            margin-top: 5rem;
+            font-size: 0.95rem;
+        }
+
+        footer p {
+            font-family: 'League Spartan', sans-serif;
+            margin: 0.75rem 0;
+            line-height: 1.7;
+            letter-spacing: 0.2px;
+            font-weight: 400;
+        }
+
+        footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            nav {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .nav-links {
+                gap: 1rem;
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .hero {
+                padding: 2rem 1rem 2rem;
+            }
+
+            .search-box {
+                padding: 1.5rem;
+            }
+
+            .hs-code-value {
+                font-size: 2.5rem;
+            }
+
+            .related-codes {
+                grid-template-columns: 1fr;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Copy Button */
+        .copy-btn {
+            background: rgba(102, 126, 234, 0.1);
+            border: none;
+            color: var(--primary);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+            font-weight: 600;
+        }
+
+        .copy-btn:hover {
+            background: rgba(102, 126, 234, 0.2);
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <section class="hero">
+        <h1>Indian Customs<br>Tariff Heading Classifier</h1>
+        <p>Powered by official Indian Customs Tariff - Accurate & Reliable Classification</p>
+    </section>
+
+    <!-- Search Section -->
+    <section class="search-container" id="search">
+        <div class="search-box">
+            <div class="input-group">
+                <label class="input-label">Write Product Description</label>
+                <div style="position: relative;">
+                    <textarea 
+                        id="productInput" 
+                        placeholder="Enter detailed product description (e.g., '100% cotton fabric, white color, 150 GSM, suitable for t-shirt manufacturing')"
+                        maxlength="250"
+                    ></textarea>
+                    <div class="char-count"><span id="charCount">0</span>/250</div>
+                </div>
+            </div>
+
+            <button class="btn-search" id="searchBtn">FIND HS CODE</button>
+
+            <!-- Error Message -->
+            <div class="error-box" id="errorBox"></div>
+
+            <!-- Loading State -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <div class="loading-text">Analyzing with AI Intelligence...</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Results Section -->
+    <section class="results-container" id="resultsSection">
+        <!-- Primary Result -->
+        <div class="primary-result" id="primaryResult">
+            <div class="primary-result-content">
+                <div class="hs-code-label">Recommended HS Code</div>
+                <div class="hs-code-value" id="hsCodeValue">-</div>
+                <div class="hs-code-description" id="hsCodeDescription">-</div>
+                <div class="confidence-badge" id="confidenceBadge">-</div>
+                <button class="copy-btn" id="copyBtn">Copy HS Code</button>
+            </div>
+        </div>
+
+        <!-- Reasons -->
+        <div class="reasons-section">
+            <h2 class="section-title">Why This HS Code?</h2>
+            <div id="reasonsList"></div>
+        </div>
+
+        <!-- Related Codes -->
+        <div class="related-section">
+            <h2 class="section-title">Related Alternative Codes</h2>
+            <div class="related-codes" id="relatedCodesContainer"></div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features-section" id="features">
+        <div class="features-content">
+            <h2 class="features-title">Why Choose HS Code Expert?</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M36 2L16 26h12L20 62l28-36H32L36 2z" fill="#D4A017" stroke="#D4A017" stroke-width="0.5"/>
+                        </svg>
+                    </div>
+                    <h3>Lightning Fast</h3>
+                    <p>Get results in seconds instead of searching through 700+ pages manually</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M32 8C18.7 8 8 18.7 8 32s10.7 24 24 24 24-10.7 24-24S45.3 8 32 8z" fill="#D4A017" opacity="0.15"/>
+                            <path d="M32 12c11 0 20 9 20 20s-9 20-20 20-20-9-20-20 9-20 20-20z" fill="none" stroke="#D4A017" stroke-width="2"/>
+                            <path d="M32 20c-6.6 0-12 5.4-12 12s5.4 12 12 12 12-5.4 12-12-5.4-12-12-12z" fill="#D4A017" opacity="0.2"/>
+                            <circle cx="32" cy="32" r="3" fill="#D4A017"/>
+                        </svg>
+                    </div>
+                    <h3>AI Intelligence</h3>
+                    <p>Powered by advanced AI that understands product descriptions contextually</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="10" y="8" width="44" height="48" rx="3" fill="#D4A017" opacity="0.1"/>
+                            <rect x="10" y="8" width="44" height="48" rx="3" fill="none" stroke="#D4A017" stroke-width="2"/>
+                            <path d="M16 20L48 20M16 28L28 28M16 36L48 36M16 44L32 44" stroke="#D4A017" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <h3>Detailed Analysis</h3>
+                    <p>Get 3 detailed reasons why a specific code matches your product</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="32" cy="32" r="28" fill="#D4A017" opacity="0.1"/>
+                            <circle cx="32" cy="32" r="28" fill="none" stroke="#D4A017" stroke-width="2"/>
+                            <path d="M26 32L30 38L42 24" fill="none" stroke="#D4A017" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h3>99% Accurate</h3>
+                    <p>Based on complete Indian Customs Tariff database with 12,500+ codes</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M20 16L14 22L20 28" fill="none" stroke="#D4A017" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M44 16L50 22L44 28" fill="none" stroke="#D4A017" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M22 32H42" stroke="#D4A017" stroke-width="2.5" stroke-linecap="round"/>
+                            <rect x="10" y="40" width="44" height="18" rx="2" fill="#D4A017" opacity="0.1" stroke="#D4A017" stroke-width="1.5"/>
+                        </svg>
+                    </div>
+                    <h3>Alternative Suggestions</h3>
+                    <p>See 2 related codes for products that fit multiple categories</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M32 6L12 16V32C12 48 32 58 32 58S52 48 52 32V16L32 6Z" fill="#D4A017" opacity="0.1" stroke="#D4A017" stroke-width="2"/>
+                            <path d="M28 34L34 40L44 24" fill="none" stroke="#D4A017" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h3>Compliance Ready</h3>
+                    <p>Ensure regulatory compliance with professional recommendations</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>© TraceContainer Built For Indian Customs Tariff Classification</p>
+        <p>Developed & Designed by ASTAR</p>
+    </footer>
+
+    <script>
+        const productInput = document.getElementById('productInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const charCount = document.getElementById('charCount');
+        const resultsSection = document.getElementById('resultsSection');
+        const loading = document.getElementById('loading');
+        const errorBox = document.getElementById('errorBox');
+        const copyBtn = document.getElementById('copyBtn');
+        let lastHSCode = '';
+
+        // Character count
+        productInput.addEventListener('input', function() {
+            charCount.textContent = this.value.length;
+            const counter = charCount.parentElement;
+            if (this.value.length > 200) {
+                counter.classList.add('warning');
+                counter.classList.remove('error');
+            } else if (this.value.length > 240) {
+                counter.classList.add('error');
+                counter.classList.remove('warning');
+            } else {
+                counter.classList.remove('warning', 'error');
+            }
+        });
+
+        // Search button
+        searchBtn.addEventListener('click', async function() {
+            const description = productInput.value.trim();
+
+            if (!description) {
+                showError('Please enter a product description');
+                return;
+            }
+
+            if (description.length < 10) {
+                showError('Please provide a more detailed description (at least 10 characters)');
+                return;
+            }
+
+            await searchHSCode(description);
+        });
+
+        // Allow Enter key (Ctrl+Enter)
+        productInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                searchBtn.click();
+            }
+        });
+
+        // Copy to clipboard
+        copyBtn.addEventListener('click', function() {
+            navigator.clipboard.writeText(lastHSCode);
+            const originalText = this.textContent;
+            this.textContent = '✓ Copied!';
+            setTimeout(() => {
+                this.textContent = originalText;
+            }, 2000);
+        });
+
+        async function searchHSCode(description) {
+            loading.classList.add('active');
+            resultsSection.classList.remove('active');
+            errorBox.classList.remove('active');
+            searchBtn.disabled = true;
+
+            try {
+                // Call your HeroHosty backend API
+                const BACKEND_URL = 'https://hscodeexpert.tracecontainer.com/api/search-hs-code';
+                
+                const response = await fetch(BACKEND_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ description })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to search HS code');
+                }
+
+                const data = await response.json();
+                displayResults(data);
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Error: ' + (error.message || 'Failed to classify HS code. Please check if backend is running.'));
+            } finally {
+                loading.classList.remove('active');
+                searchBtn.disabled = false;
+            }
+        }
+
+        function displayResults(data) {
+            lastHSCode = data.hsCode;
+            
+            // Primary HS Code
+            document.getElementById('hsCodeValue').textContent = data.hsCode;
+            document.getElementById('hsCodeDescription').textContent = data.description;
+            document.getElementById('confidenceBadge').textContent = `Confidence: ${data.confidence}%`;
+
+            // Reasons
+            const reasonsList = document.getElementById('reasonsList');
+            reasonsList.innerHTML = data.reasons.map((reason, index) => `
+                <div class="reason-item">
+                    <div class="reason-title">Reason ${index + 1}</div>
+                    <div class="reason-text">${reason}</div>
+                </div>
+            `).join('');
+
+            // Related Codes
+            const relatedContainer = document.getElementById('relatedCodesContainer');
+            relatedContainer.innerHTML = data.relatedCodes.map(code => `
+                <div class="related-card">
+                    <div class="related-code">${code.code}</div>
+                    <div class="related-description">${code.description}</div>
+                </div>
+            `).join('');
+
+            resultsSection.classList.add('active');
+            
+            // Scroll to results
+            setTimeout(() => {
+                resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.classList.add('active');
+            resultsSection.classList.remove('active');
+            errorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    </script>
+</body>
+</html>
