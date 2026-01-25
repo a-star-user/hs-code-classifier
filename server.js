@@ -22,9 +22,42 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Initialize Gemini
+// Initialize Gemini with model selection
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyCt5uBy9ORizLHv8IIU2Wx-byYJh1VaiX4');
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+// List of models in order of capability (for PDF processing)
+const AVAILABLE_MODELS = [
+    'gemini-2.0-flash',      // Latest, fastest, best context window
+    'gemini-1.5-pro',        // Handles 1M tokens, excellent for large PDFs
+    'gemini-1.5-flash',      // Fast, large context
+    'gemini-pro',            // Fallback
+];
+
+let selectedModel = null;
+
+// Initialize model on startup
+async function initializeModel() {
+    for (const modelName of AVAILABLE_MODELS) {
+        try {
+            console.log(`🤖 Testing model: ${modelName}...`);
+            const testModel = genAI.getGenerativeModel({ model: modelName });
+            
+            // Test if model works with a simple call
+            const testResponse = await testModel.generateContent('Test');
+            console.log(`✅ Model ${modelName} is available!`);
+            selectedModel = modelName;
+            return testModel;
+        } catch (error) {
+            console.log(`⚠️ Model ${modelName} not available: ${error.message}`);
+            continue;
+        }
+    }
+    
+    console.error('❌ No Gemini models available!');
+    process.exit(1);
+}
+
+let model;
 
 let tariffContext = '';
 let tariffLoaded = false;
@@ -44,30 +77,35 @@ async function loadPDF() {
         const data = await pdfParse(pdfBuffer);
         
         // Extract HS codes and their descriptions from PDF
-        // Format: XXXXXX - Description
+        // Modern Gemini models can handle large context (1M+ tokens)
+        // Use more of the PDF for better accuracy
         const lines = data.text.split('\n');
         let extractedCodes = [];
         
         for (let line of lines) {
-            // Look for 8-digit codes (Indian HS codes can be 8 or 10 digits, we'll use 8)
+            // Look for 8-digit codes (Indian HS codes)
             const match = line.match(/^(\d{8})\s*[-–]\s*(.+)/);
             if (match) {
                 extractedCodes.push(`${match[1]} - ${match[2].trim()}`);
             }
         }
         
-        // Use extracted codes + full context
-        tariffContext = extractedCodes.slice(0, 100).join('\n');
-        if (tariffContext.length < 500) {
-            // If not enough codes extracted, use raw text
-            tariffContext = data.text.substring(0, 5000);
+        // Use more extracted codes (Gemini 1.5 can handle 1M tokens!)
+        // Take first 300 codes instead of 100 for better accuracy
+        tariffContext = extractedCodes.slice(0, 300).join('\n');
+        
+        if (tariffContext.length < 1000) {
+            // If not enough codes, use raw text from PDF
+            // Modern models can handle 50,000+ character contexts easily
+            tariffContext = data.text.substring(0, 50000);
         }
         
         tariffLoaded = true;
         
         console.log('✅ PDF loaded successfully');
         console.log('📊 Found HS codes:', extractedCodes.length);
-        console.log('📊 Context length:', tariffContext.length, 'characters');
+        console.log('📊 Context size:', tariffContext.length, 'characters');
+        console.log('📄 PDF pages:', data.numpages);
         
     } catch (error) {
         console.error('❌ Error loading PDF:', error.message);
@@ -83,6 +121,7 @@ app.get('/', (req, res) => {
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'OK',
+        model: selectedModel || 'initializing',
         pdfLoaded: tariffLoaded,
         contextLength: tariffContext.length,
         timestamp: new Date().toISOString()
@@ -237,8 +276,12 @@ Return ONLY valid JSON:
 
 // Start server and load PDF
 app.listen(PORT, async () => {
+    // Initialize the best available model
+    model = await initializeModel();
+    
     await loadPDF();
     console.log(`\n✓ Server running on port ${PORT}`);
+    console.log(`✓ Using model: ${selectedModel}`);
     console.log(`✓ Frontend: http://localhost:${PORT}/`);
     console.log(`✓ Health: http://localhost:${PORT}/api/health`);
     console.log(`✓ API: POST http://localhost:${PORT}/api/search-hs-code\n`);
