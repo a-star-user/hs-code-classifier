@@ -5,6 +5,12 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import fetch from 'node-fetch';
+
+// Ensure fetch is available globally
+if (!globalThis.fetch) {
+    globalThis.fetch = fetch;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

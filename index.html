@@ -971,6 +971,12 @@
         }
 
         function displayResults(data) {
+            // Check if clarifications are needed
+            if (data.needsClarification) {
+                displayClarifications(data);
+                return;
+            }
+
             lastHSCode = data.hsCode;
             
             // Primary HS Code
@@ -999,6 +1005,58 @@
             resultsSection.classList.add('active');
             
             // Scroll to results
+            setTimeout(() => {
+                resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+
+        function displayClarifications(data) {
+            // Show clarification questions
+            const clarificationsHTML = `
+                <div style="padding: 20px; background-color: #f0f7ff; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="color: #2563eb; margin-top: 0;">Additional Information Needed</h3>
+                    <p style="color: #555; margin-bottom: 20px;">${data.message}</p>
+                    <div style="display: flex; flex-direction: column; gap: 15px;">
+                        ${data.clarificationQuestions.map((question, index) => `
+                            <div>
+                                <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #333;">
+                                    ${question}
+                                </label>
+                                <input type="text" 
+                                    id="clarification-${index}" 
+                                    placeholder="Please provide details..." 
+                                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit;">
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button id="refineSearchBtn" 
+                        style="margin-top: 20px; padding: 12px 24px; background-color: #2563eb; color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer;">
+                        Search Again with Details
+                    </button>
+                </div>
+            `;
+            
+            resultsSection.innerHTML = clarificationsHTML;
+            resultsSection.classList.add('active');
+            
+            // Add event listener to refine search button
+            document.getElementById('refineSearchBtn').addEventListener('click', async () => {
+                const details = Array.from(document.querySelectorAll('[id^="clarification-"]'))
+                    .map(input => input.value)
+                    .filter(val => val.trim().length > 0)
+                    .join(', ');
+                
+                if (details.length === 0) {
+                    showError('Please answer at least one question');
+                    return;
+                }
+                
+                const refinedDescription = document.getElementById('descriptionInput').value + ' (' + details + ')';
+                document.getElementById('descriptionInput').value = refinedDescription;
+                searchBtn.click();
+            });
+            
+            // Scroll to clarifications
             setTimeout(() => {
                 resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 100);
