@@ -1,0 +1,21 @@
+node_modules/
+.env
+.env.local
+*.log
+.DS_Store
+.git/
+Customs Tariff of India.pdf
+server_simple.js
+server_test.js
+*.html.html
+_FINAL_SUMMARY.txt
+DEPLOYMENT_*.md
+DEPLOYMENT_*.txt
+QUICK_START.md
+START_HERE.md
+FILE_STRUCTURE.md
+00_READ_ME_FIRST.txt
+README.md
+INDEX.md
+deploy.sh
+setup.bat

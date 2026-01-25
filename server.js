@@ -23,7 +23,16 @@ app.use(express.json());
 app.use(express.static(__dirname));
 
 // Initialize Gemini with model selection
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyCt5uBy9ORizLHv8IIU2Wx-byYJh1VaiX4');
+// IMPORTANT: API key must be in environment variable, NEVER hardcoded!
+const apiKey = process.env.GEMINI_API_KEY;
+
+if (!apiKey) {
+    console.error('❌ FATAL ERROR: GEMINI_API_KEY environment variable not set!');
+    console.error('Set it using: export GEMINI_API_KEY="your-key-here"');
+    process.exit(1);
+}
+
+const genAI = new GoogleGenerativeAI(apiKey);
 
 // List of models in order of capability (for PDF processing)
 const AVAILABLE_MODELS = [
