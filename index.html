@@ -943,8 +943,8 @@
             searchBtn.disabled = true;
 
             try {
-                // Call your HeroHosty backend API
-                const BACKEND_URL = 'https://hscodeexpert.tracecontainer.com/api/search-hs-code';
+                // Call Railway backend API
+                const BACKEND_URL = '/api/search-hs-code';
                 
                 const response = await fetch(BACKEND_URL, {
                     method: 'POST',
