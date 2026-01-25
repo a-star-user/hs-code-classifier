@@ -34,8 +34,8 @@ if (!apiKey) {
 
 const groq = new Groq({ apiKey: apiKey });
 
-// Use the most capable Groq model
-const SELECTED_MODEL = 'mixtral-8x7b-32768';
+// Use the most capable Groq model (currently available)
+const SELECTED_MODEL = 'llama-3.1-70b-versatile';
 console.log(`🤖 Using model: ${SELECTED_MODEL}`);
 
 let tariffContext = '';
