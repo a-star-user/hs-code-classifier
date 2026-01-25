@@ -96,7 +96,67 @@ app.post('/api/search-hs-code', async (req, res) => {
             return res.status(500).json({ error: 'PDF not loaded yet. Try again in a moment.' });
         }
 
-        // Create prompt with PDF context
+        // First, check if description is too vague
+        const clarificationPrompt = `You are a customs expert analyzing a product description to determine if an 8-digit Indian HS code can be accurately assigned.
+
+Product Description: "${description}"
+
+Analyze this description and determine:
+1. Is it too vague to classify accurately into a single HS code?
+2. What SPECIFIC product characteristics would help determine the EXACT HS code?
+
+Generate 3-5 SPECIFIC questions that are DIRECTLY relevant to this exact product type. These questions should help distinguish between similar HS codes.
+
+Example: If product is "plastic container":
+- "Is it designed for food storage or other uses?"
+- "Is the container rigid, semi-rigid, or flexible?"
+- "What is the capacity range (small, medium, large)?"
+
+Respond with JSON only - Generate questions specific to THIS product, not generic ones:
+{
+  "isTooVague": true/false,
+  "specificityScore": 0-10,
+  "productType": "what type of product this is",
+  "clarifications": [
+    "Specific question 1 for THIS product type",
+    "Specific question 2 for THIS product type",
+    "Specific question 3 for THIS product type",
+    "Specific question 4 for THIS product type"
+  ]
+}`;
+
+        const clarificationCheck = await model.generateContent(clarificationPrompt);
+        const clarificationText = clarificationCheck.response.text();
+        const clarificationMatch = clarificationText.match(/\{[\s\S]*\}/);
+        
+        if (!clarificationMatch) {
+            throw new Error('Could not parse clarity check');
+        }
+
+        const clarityResponse = JSON.parse(clarificationMatch[0]);
+
+        // If description is too vague, return clarification questions
+        if (clarityResponse.isTooVague || clarityResponse.specificityScore < 5) {
+            console.log('⚠️ Description too vague, requesting clarifications');
+            return res.json({
+                needsClarification: true,
+                message: `Help us determine the perfect HS code for this ${clarityResponse.productType || 'product'}`,
+                clarificationQuestions: clarityResponse.clarifications || [
+                    'What is the material or composition?',
+                    'What is the primary purpose or use?',
+                    'What is the size, weight, or quantity?',
+                    'Is it a finished product or raw material?',
+                    'Are there any special features or components?'
+                ],
+                hsCode: null,
+                description: null,
+                confidence: 0,
+                reasons: [],
+                relatedCodes: []
+            });
+        }
+
+        // If description is specific enough, proceed with HS code search
         const prompt = `You are an expert Indian Customs Tariff classifier. Use ONLY the tariff codes provided below.
 
 PRODUCT: "${description}"
@@ -147,6 +207,7 @@ Return ONLY valid JSON:
         console.log('✅ Found HS Code:', parsedResponse.hsCode);
 
         res.json({
+            needsClarification: false,
             hsCode: parsedResponse.hsCode || '00000000',
             description: parsedResponse.description || description,
             confidence: parsedResponse.confidence || 85,
@@ -158,6 +219,7 @@ Return ONLY valid JSON:
         console.error('❌ API Error:', error.message);
         res.status(500).json({
             error: error.message || 'Failed to search HS code',
+            needsClarification: false,
             hsCode: '00000000',
             description: 'Error occurred',
             confidence: 0,
