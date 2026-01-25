@@ -4,7 +4,7 @@ import pdfParse from 'pdf-parse';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import fetch from 'node-fetch';
 
 // Ensure fetch is available globally
@@ -22,22 +22,20 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Initialize Gemini with model selection
+// Initialize Groq
 // IMPORTANT: API key must be in environment variable, NEVER hardcoded!
-const apiKey = process.env.GEMINI_API_KEY;
+const apiKey = process.env.GROQ_API_KEY;
 
 if (!apiKey) {
-    console.error('❌ FATAL ERROR: GEMINI_API_KEY environment variable not set!');
-    console.error('Set it using: export GEMINI_API_KEY="your-key-here"');
+    console.error('❌ FATAL ERROR: GROQ_API_KEY environment variable not set!');
+    console.error('Set it using: export GROQ_API_KEY="your-key-here"');
     process.exit(1);
 }
 
-const genAI = new GoogleGenerativeAI(apiKey);
+const groq = new Groq({ apiKey: apiKey });
 
-// Use the most stable model for large PDF processing
-const SELECTED_MODEL = 'gemini-2.0-flash';
-let model = genAI.getGenerativeModel({ model: SELECTED_MODEL });
-
+// Use the most capable Groq model
+const SELECTED_MODEL = 'mixtral-8x7b-32768';
 console.log(`🤖 Using model: ${SELECTED_MODEL}`);
 
 let tariffContext = '';
@@ -122,7 +120,7 @@ app.post('/api/search-hs-code', async (req, res) => {
             return res.status(500).json({ error: 'PDF not loaded yet. Try again in a moment.' });
         }
 
-        // First, check if description is too vague
+        // First, check if description is too vague using Groq
         const clarificationPrompt = `You are a customs expert analyzing a product description to determine if an 8-digit Indian HS code can be accurately assigned.
 
 Product Description: "${description}"
@@ -133,12 +131,7 @@ Analyze this description and determine:
 
 Generate 3-5 SPECIFIC questions that are DIRECTLY relevant to this exact product type. These questions should help distinguish between similar HS codes.
 
-Example: If product is "plastic container":
-- "Is it designed for food storage or other uses?"
-- "Is the container rigid, semi-rigid, or flexible?"
-- "What is the capacity range (small, medium, large)?"
-
-Respond with JSON only - Generate questions specific to THIS product, not generic ones:
+Respond with JSON only:
 {
   "isTooVague": true/false,
   "specificityScore": 0-10,
@@ -146,13 +139,18 @@ Respond with JSON only - Generate questions specific to THIS product, not generi
   "clarifications": [
     "Specific question 1 for THIS product type",
     "Specific question 2 for THIS product type",
-    "Specific question 3 for THIS product type",
-    "Specific question 4 for THIS product type"
+    "Specific question 3 for THIS product type"
   ]
 }`;
 
-        const clarificationCheck = await model.generateContent(clarificationPrompt);
-        const clarificationText = clarificationCheck.response.text();
+        const clarificationCheck = await groq.chat.completions.create({
+            messages: [{ role: 'user', content: clarificationPrompt }],
+            model: SELECTED_MODEL,
+            temperature: 0.3,
+            max_tokens: 500,
+        });
+
+        const clarificationText = clarificationCheck.choices[0].message.content;
         const clarificationMatch = clarificationText.match(/\{[\s\S]*\}/);
         
         if (!clarificationMatch) {
@@ -171,8 +169,7 @@ Respond with JSON only - Generate questions specific to THIS product, not generi
                     'What is the material or composition?',
                     'What is the primary purpose or use?',
                     'What is the size, weight, or quantity?',
-                    'Is it a finished product or raw material?',
-                    'Are there any special features or components?'
+                    'Is it a finished product or raw material?'
                 ],
                 hsCode: null,
                 description: null,
@@ -182,7 +179,7 @@ Respond with JSON only - Generate questions specific to THIS product, not generi
             });
         }
 
-        // If description is specific enough, proceed with HS code search
+        // If description is specific enough, proceed with HS code search using Groq
         const prompt = `You are an expert Indian Customs Tariff classifier. Use ONLY the tariff codes provided below.
 
 PRODUCT: "${description}"
@@ -198,7 +195,7 @@ INSTRUCTIONS:
 IMPORTANT: 
 - Use ONLY codes from the reference provided
 - Reasons must reference specific tariff descriptions
-- Related codes must be logically connected (e.g., printer → printer parts, cartridges)
+- Related codes must be logically connected
 
 Return ONLY valid JSON:
 {
@@ -218,8 +215,14 @@ Return ONLY valid JSON:
 
         console.log('🔍 Searching for:', description);
         
-        const response = await model.generateContent(prompt);
-        const responseText = response.response.text();
+        const response = await groq.chat.completions.create({
+            messages: [{ role: 'user', content: prompt }],
+            model: SELECTED_MODEL,
+            temperature: 0.2,
+            max_tokens: 1000,
+        });
+
+        const responseText = response.choices[0].message.content;
 
         // Extract JSON from response
         let jsonMatch = responseText.match(/\{[\s\S]*\}/);
