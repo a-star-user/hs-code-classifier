@@ -34,39 +34,11 @@ if (!apiKey) {
 
 const genAI = new GoogleGenerativeAI(apiKey);
 
-// List of models in order of capability (for PDF processing)
-const AVAILABLE_MODELS = [
-    'gemini-2.0-flash',      // Latest, fastest, best context window
-    'gemini-1.5-pro',        // Handles 1M tokens, excellent for large PDFs
-    'gemini-1.5-flash',      // Fast, large context
-    'gemini-pro',            // Fallback
-];
+// Use the most stable model for large PDF processing
+const SELECTED_MODEL = 'gemini-2.0-flash';
+let model = genAI.getGenerativeModel({ model: SELECTED_MODEL });
 
-let selectedModel = null;
-
-// Initialize model on startup
-async function initializeModel() {
-    for (const modelName of AVAILABLE_MODELS) {
-        try {
-            console.log(`🤖 Testing model: ${modelName}...`);
-            const testModel = genAI.getGenerativeModel({ model: modelName });
-            
-            // Test if model works with a simple call
-            const testResponse = await testModel.generateContent('Test');
-            console.log(`✅ Model ${modelName} is available!`);
-            selectedModel = modelName;
-            return testModel;
-        } catch (error) {
-            console.log(`⚠️ Model ${modelName} not available: ${error.message}`);
-            continue;
-        }
-    }
-    
-    console.error('❌ No Gemini models available!');
-    process.exit(1);
-}
-
-let model;
+console.log(`🤖 Using model: ${SELECTED_MODEL}`);
 
 let tariffContext = '';
 let tariffLoaded = false;
@@ -130,7 +102,7 @@ app.get('/', (req, res) => {
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'OK',
-        model: selectedModel || 'initializing',
+        model: SELECTED_MODEL,
         pdfLoaded: tariffLoaded,
         contextLength: tariffContext.length,
         timestamp: new Date().toISOString()
@@ -285,12 +257,9 @@ Return ONLY valid JSON:
 
 // Start server and load PDF
 app.listen(PORT, async () => {
-    // Initialize the best available model
-    model = await initializeModel();
-    
     await loadPDF();
     console.log(`\n✓ Server running on port ${PORT}`);
-    console.log(`✓ Using model: ${selectedModel}`);
+    console.log(`✓ Using model: ${SELECTED_MODEL}`);
     console.log(`✓ Frontend: http://localhost:${PORT}/`);
     console.log(`✓ Health: http://localhost:${PORT}/api/health`);
     console.log(`✓ API: POST http://localhost:${PORT}/api/search-hs-code\n`);
