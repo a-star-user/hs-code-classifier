@@ -35,13 +35,12 @@ if (!apiKey) {
 const groq = new Groq({ apiKey: apiKey });
 
 // Use the latest available Groq model - try multiple in order of reliability
-// Use full Groq model IDs - these are the actual available models
-let SELECTED_MODEL = 'meta-llama/llama-3.1-8b-instant'; 
+// Use correct Groq model names
+let SELECTED_MODEL = 'llama-3.1-8b-instant'; 
 const BACKUP_MODELS = [
-    'meta-llama/llama-3.3-70b-versatile',
-    'meta-llama/llama-3.1-8b-instant',
+    'llama-3.3-70b-versatile',
     'mixtral-8x7b-32768',
-    'meta-llama/llama-2-70b-chat'
+    'llama-2-70b-chat'
 ];
 
 console.log(`🤖 Attempting to use model: ${SELECTED_MODEL}`);
