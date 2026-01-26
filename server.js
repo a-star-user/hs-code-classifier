@@ -22,32 +22,31 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Initialize Groq
-// IMPORTANT: API key must be in environment variable, NEVER hardcoded!
+// Initialize Groq (optional - will try, but will fallback to local search)
+let groq = null;
 const apiKey = process.env.GROQ_API_KEY;
 
-if (!apiKey) {
-    console.error('❌ FATAL ERROR: GROQ_API_KEY environment variable not set!');
-    console.error('Set it using: export GROQ_API_KEY="your-key-here"');
-    process.exit(1);
+if (apiKey) {
+    try {
+        groq = new Groq({ apiKey: apiKey });
+        console.log('✅ Groq API available (will try, but not required)');
+    } catch (e) {
+        console.warn('⚠️ Groq initialization failed, using local search instead');
+        groq = null;
+    }
 }
 
-const groq = new Groq({ apiKey: apiKey });
-
-// Use the latest available Groq model - try multiple in order of reliability
-// Use Groq's native models first (most reliable), then Meta's llama models
-let SELECTED_MODEL = 'groq/compound'; 
+const SELECTED_MODEL = 'llama-3.3-70b-versatile';
 const BACKUP_MODELS = [
-    'groq/compound-mini',
     'llama-3.1-8b-instant',
-    'llama-3.3-70b-versatile'
+    'groq/compound',
+    'groq/compound-mini'
 ];
-
-console.log(`🤖 Attempting to use model: ${SELECTED_MODEL}`);
 
 let tariffContext = '';
 let tariffLoaded = false;
 let hsCodeList = []; // Store structured codes
+let hsCodeMap = {}; // Map for fast lookup
 
 // Load and parse PDF on startup
 async function loadPDF() {
@@ -192,7 +191,59 @@ app.get('/api/groq-models', async (req, res) => {
     }
 });
 
-// Search HS Code using PDF + Groq
+// SMART LOCAL SEARCH - Works instantly without API
+function findHSCodeLocally(productDescription) {
+    if (!hsCodeList.length) {
+        return null;
+    }
+    
+    const keywords = productDescription.toLowerCase().split(/\s+/);
+    const scored = hsCodeList.map(item => {
+        let score = 0;
+        const descLower = item.description.toLowerCase();
+        
+        // Exact phrase match = highest score
+        if (descLower.includes(productDescription.toLowerCase())) {
+            score += 100;
+        }
+        
+        // Each keyword match
+        keywords.forEach(keyword => {
+            if (descLower.includes(keyword)) {
+                score += 10;
+            }
+        });
+        
+        // Prioritize shorter, more specific descriptions
+        score -= item.description.length / 100;
+        
+        return { ...item, score };
+    });
+    
+    const best = scored.sort((a, b) => b.score - a.score)[0];
+    const top3 = scored.sort((a, b) => b.score - a.score).slice(1, 4);
+    
+    if (!best || best.score < 5) {
+        return null; // Not confident
+    }
+    
+    return {
+        hsCode: best.code,
+        description: best.description,
+        confidence: Math.min(100, Math.max(50, best.score * 5)),
+        reasons: [
+            `Matches keyword "${keywords[0]}"`,
+            `Related to ${best.description.split(' ').slice(0, 3).join(' ')}`,
+            `Classification: 8-digit HS code from Indian Customs Tariff`
+        ],
+        relatedCodes: top3.map(item => ({
+            code: item.code,
+            description: item.description
+        }))
+    };
+}
+
+// Search HS Code - TRY LOCAL FIRST, then API if available
 app.post('/api/search-hs-code', async (req, res) => {
     const startTime = Date.now();
     
@@ -226,10 +277,57 @@ app.post('/api/search-hs-code', async (req, res) => {
 
         const trimmedDescription = description.trim();
         console.log('🔍 Processing:', trimmedDescription.substring(0, 100), isFollowUp ? '(Follow-up)' : '(Initial)');
+        // STEP 2: TRY LOCAL SEARCH FIRST (instant, no API calls)
+        console.log('🔎 Searching locally in extracted HS codes...');
+        const localResult = findHSCodeLocally(trimmedDescription);
+        
+        if (localResult && localResult.confidence >= 70) {
+            console.log(`✅ Local match found: ${localResult.hsCode} (confidence: ${localResult.confidence}%)`);
+            const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
+            console.log(`⚡ Instant result in ${processingTime}s (no API needed)`);
+            
+            return res.json({
+                needsClarification: false,
+                hsCode: localResult.hsCode,
+                description: localResult.description,
+                confidence: localResult.confidence,
+                reasons: localResult.reasons,
+                relatedCodes: localResult.relatedCodes
+            });
+        }
 
-        // SMART FLOW: Always try to find HS code first
-        // If confident → return results
-        // If NOT confident → ask clarification questions
+        // STEP 3: If local search not confident enough AND Groq available, try API
+        if (!groq) {
+            // No Groq, return local result with lower confidence or ask for clarification
+            if (localResult) {
+                console.log('⚠️ Low confidence local match, Groq not available');
+                return res.json({
+                    needsClarification: true,
+                    clarificationQuestions: [
+                        'What is the material composition?',
+                        'What is the intended use?',
+                        'What is the weight or quantity?'
+                    ],
+                    hsCode: null,
+                    description: null,
+                    confidence: 0,
+                    reasons: [],
+                    relatedCodes: []
+                });
+            }
+            
+            return res.status(503).json({
+                error: 'Could not determine HS code. No AI service available.',
+                needsClarification: false,
+                hsCode: null,
+                description: null,
+                confidence: 0,
+                reasons: [],
+                relatedCodes: []
+            });
+        }
+
+        console.log('🚀 Confidence low, trying Groq API for detailed analysis...');
         
         const prompt = `You are an expert customs classifier with 50+ years of experience.
 
@@ -257,8 +355,6 @@ FORMAT (ONLY this JSON, nothing else):
   "relatedCodes": [{"code": "12345678", "description": "name"}] or [],
   "clarificationQuestions": null or ["question1?", "question2?"]
 }`;
-
-        console.log('🚀 Calling Groq API...');
 
         let response;
         let usedModel = SELECTED_MODEL;
