@@ -358,6 +358,168 @@
             font-size: 1.1rem;
         }
 
+        /* Clarification Form Styles */
+        .clarification-container {
+            background: linear-gradient(135deg, #ffffff 0%, #f5f8ff 100%);
+            border: 2px solid #dbeafe;
+            border-radius: 16px;
+            padding: 3rem 2.5rem;
+            margin-top: 2rem;
+            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.1);
+            animation: slideUp 0.4s ease;
+        }
+
+        .clarification-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .clarification-header svg {
+            width: 32px;
+            height: 32px;
+            color: var(--primary);
+            flex-shrink: 0;
+        }
+
+        .clarification-header h2 {
+            font-family: 'Gabarito', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 0;
+            line-height: 1.3;
+            letter-spacing: -0.3px;
+            text-transform: uppercase;
+        }
+
+        .clarification-message {
+            font-size: 1.05rem;
+            color: #475569;
+            margin-bottom: 2.5rem;
+            line-height: 1.7;
+            font-weight: 500;
+        }
+
+        .clarification-form {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .form-label {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 0.95rem;
+            cursor: pointer;
+            line-height: 1.5;
+        }
+
+        .question-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border-radius: 50%;
+            font-weight: 700;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .form-input {
+            padding: 1rem 1.25rem;
+            border: 2px solid #cbd5e1;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-family: 'League Spartan', sans-serif;
+            color: #1e293b;
+            background: white;
+            transition: all 0.3s ease;
+            line-height: 1.6;
+        }
+
+        .form-input::placeholder {
+            color: #94a3b8;
+            font-weight: 400;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+
+        .form-input:hover {
+            border-color: #94a3b8;
+        }
+
+        .clarification-actions {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .btn-refine {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            padding: 1rem 2.5rem;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: 'League Spartan', sans-serif;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 0.3px;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-refine:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+            opacity: 0.95;
+        }
+
+        .btn-refine:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-refine:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-refine svg {
+            width: 18px;
+            height: 18px;
+            transition: transform 0.3s ease;
+        }
+
+        .btn-refine:hover:not(:disabled) svg {
+            transform: translateX(3px);
+        }
+
         /* Primary Result Card */
         .result-card {
             background: transparent;
@@ -1011,28 +1173,42 @@
         }
 
         function displayClarifications(data) {
-            // Show clarification questions
+            // Show clarification questions with beautiful UI
             const clarificationsHTML = `
-                <div style="padding: 20px; background-color: #f0f7ff; border-radius: 8px; margin-bottom: 20px;">
-                    <h3 style="color: #2563eb; margin-top: 0;">Additional Information Needed</h3>
-                    <p style="color: #555; margin-bottom: 20px;">${data.message}</p>
-                    <div style="display: flex; flex-direction: column; gap: 15px;">
+                <div class="clarification-container">
+                    <div class="clarification-header">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M12 16v-4M12 8h.01"></path>
+                        </svg>
+                        <h2>Perfect Your Search</h2>
+                    </div>
+                    <p class="clarification-message">${data.message}</p>
+                    
+                    <div class="clarification-form">
                         ${data.clarificationQuestions.map((question, index) => `
-                            <div>
-                                <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #333;">
+                            <div class="form-group">
+                                <label for="clarification-${index}" class="form-label">
+                                    <span class="question-number">${index + 1}</span>
                                     ${question}
                                 </label>
                                 <input type="text" 
                                     id="clarification-${index}" 
-                                    placeholder="Please provide details..." 
-                                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit;">
+                                    placeholder="Enter your answer..." 
+                                    class="form-input"
+                                    autocomplete="off">
                             </div>
                         `).join('')}
                     </div>
-                    <button id="refineSearchBtn" 
-                        style="margin-top: 20px; padding: 12px 24px; background-color: #2563eb; color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer;">
-                        Search Again with Details
-                    </button>
+                    
+                    <div class="clarification-actions">
+                        <button id="refineSearchBtn" class="btn-refine">
+                            <span>Find HS Code with Details</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             `;
             
@@ -1041,23 +1217,59 @@
             
             // Add event listener to refine search button
             document.getElementById('refineSearchBtn').addEventListener('click', async () => {
-                const details = Array.from(document.querySelectorAll('[id^="clarification-"]'))
-                    .map(input => input.value)
-                    .filter(val => val.trim().length > 0)
-                    .join(', ');
+                const refineBtn = document.getElementById('refineSearchBtn');
+                const inputs = Array.from(document.querySelectorAll('[id^="clarification-"]'));
+                
+                const details = inputs
+                    .map(input => input.value.trim())
+                    .filter(val => val.length > 0)
+                    .map((val, idx) => `${data.clarificationQuestions[idx]}: ${val}`)
+                    .join('; ');
                 
                 if (details.length === 0) {
-                    showError('Please answer at least one question');
+                    showError('Please answer at least one question to continue');
                     return;
                 }
                 
-                const refinedDescription = document.getElementById('descriptionInput').value + ' (' + details + ')';
-                document.getElementById('descriptionInput').value = refinedDescription;
-                searchBtn.click();
+                // Disable button and show loading
+                refineBtn.disabled = true;
+                refineBtn.innerHTML = '<span>Searching...</span>';
+                
+                try {
+                    const originalDescription = document.getElementById('descriptionInput').value;
+                    const refinedDescription = originalDescription + ' [Additional Details: ' + details + ']';
+                    
+                    // Make API call directly with refined description
+                    const response = await fetch('/api/search-hs-code', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ description: refinedDescription })
+                    });
+                    
+                    const responseData = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(responseData.error || 'Search failed');
+                    }
+                    
+                    // Check if it still needs clarification
+                    if (responseData.needsClarification) {
+                        displayClarifications(responseData);
+                    } else {
+                        displayResults(responseData);
+                    }
+                } catch (error) {
+                    showError('Error: ' + error.message);
+                } finally {
+                    refineBtn.disabled = false;
+                    refineBtn.innerHTML = '<span>Find HS Code with Details</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>';
+                }
             });
             
-            // Scroll to clarifications
+            // Auto-focus first input
             setTimeout(() => {
+                const firstInput = document.getElementById('clarification-0');
+                if (firstInput) firstInput.focus();
                 resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 100);
         }

@@ -121,25 +121,28 @@ app.post('/api/search-hs-code', async (req, res) => {
         }
 
         // First, check if description is too vague using Groq
-        const clarificationPrompt = `You are a customs expert analyzing a product description to determine if an 8-digit Indian HS code can be accurately assigned.
+        const clarificationPrompt = `You are a customs expert analyzing a product description for Indian HS code classification.
 
 Product Description: "${description}"
 
-Analyze this description and determine:
-1. Is it too vague to classify accurately into a single HS code?
-2. What SPECIFIC product characteristics would help determine the EXACT HS code?
+Determine if this description has enough details for accurate classification.
 
-Generate 3-5 SPECIFIC questions that are DIRECTLY relevant to this exact product type. These questions should help distinguish between similar HS codes.
+IMPORTANT: Only ask 2-3 CRITICAL questions that will directly lead to determining the EXACT HS code. Do NOT ask generic questions. Ask ONLY what's necessary.
 
-Respond with JSON only:
+Example: 
+- If "fabric" → Ask: "What is the fiber content (cotton, polyester, wool, blend)?" and "Is it woven or knitted?"
+- If "machine" → Ask: "What specific type of machine (printing, textile, packaging)?"
+
+Generate questions specific to THIS exact product. Keep it minimal and essential.
+
+Respond with JSON:
 {
   "isTooVague": true/false,
   "specificityScore": 0-10,
-  "productType": "what type of product this is",
+  "productType": "what type of product",
   "clarifications": [
-    "Specific question 1 for THIS product type",
-    "Specific question 2 for THIS product type",
-    "Specific question 3 for THIS product type"
+    "CRITICAL question 1",
+    "CRITICAL question 2"
   ]
 }`;
 
@@ -164,12 +167,10 @@ Respond with JSON only:
             console.log('⚠️ Description too vague, requesting clarifications');
             return res.json({
                 needsClarification: true,
-                message: `Help us determine the perfect HS code for this ${clarityResponse.productType || 'product'}`,
+                message: `Please provide key details about this ${clarityResponse.productType || 'product'} to find the perfect HS code`,
                 clarificationQuestions: clarityResponse.clarifications || [
-                    'What is the material or composition?',
-                    'What is the primary purpose or use?',
-                    'What is the size, weight, or quantity?',
-                    'Is it a finished product or raw material?'
+                    'What are the key material/composition details?',
+                    'What is the primary intended use?'
                 ],
                 hsCode: null,
                 description: null,
