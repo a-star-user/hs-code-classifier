@@ -56,8 +56,6 @@ async function loadPDF() {
         const data = await pdfParse(pdfBuffer);
         
         // Extract HS codes and their descriptions from PDF
-        // Modern Gemini models can handle large context (1M+ tokens)
-        // Use more of the PDF for better accuracy
         const lines = data.text.split('\n');
         let extractedCodes = [];
         
@@ -69,13 +67,11 @@ async function loadPDF() {
             }
         }
         
-        // Use more extracted codes (Gemini 1.5 can handle 1M tokens!)
-        // Take first 300 codes instead of 100 for better accuracy
+        // Use extracted codes for better accuracy
         tariffContext = extractedCodes.slice(0, 300).join('\n');
         
         if (tariffContext.length < 1000) {
             // If not enough codes, use raw text from PDF
-            // Modern models can handle 50,000+ character contexts easily
             tariffContext = data.text.substring(0, 50000);
         }
         
@@ -107,23 +103,45 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Search HS Code using PDF + Gemini
+// Search HS Code using PDF + Groq
 app.post('/api/search-hs-code', async (req, res) => {
+    const startTime = Date.now();
+    
     try {
         const { description } = req.body;
 
-        if (!description || description.trim().length === 0) {
-            return res.status(400).json({ error: 'Product description is required' });
+        // STEP 1: Validate input
+        if (!description || typeof description !== 'string' || description.trim().length === 0) {
+            return res.status(400).json({ 
+                error: 'Product description is required',
+                needsClarification: false,
+                hsCode: null,
+                description: null,
+                confidence: 0,
+                reasons: [],
+                relatedCodes: []
+            });
         }
 
         if (!tariffLoaded || !tariffContext) {
-            return res.status(500).json({ error: 'PDF not loaded yet. Try again in a moment.' });
+            return res.status(503).json({ 
+                error: 'Service initializing. Please try again in a moment.',
+                needsClarification: false,
+                hsCode: null,
+                description: null,
+                confidence: 0,
+                reasons: [],
+                relatedCodes: []
+            });
         }
 
-        // First, check if description is too vague using Groq
+        const trimmedDescription = description.trim();
+        console.log('🔍 Processing:', trimmedDescription.substring(0, 100));
+
+        // STEP 2: Check if description is too vague
         const clarificationPrompt = `You are a customs expert analyzing a product description for Indian HS code classification.
 
-Product Description: "${description}"
+Product Description: "${trimmedDescription}"
 
 Determine if this description has enough details for accurate classification.
 
@@ -135,43 +153,56 @@ Example:
 
 Generate questions specific to THIS exact product. Keep it minimal and essential.
 
-Respond with JSON:
+Respond with ONLY valid JSON (no markdown):
 {
   "isTooVague": true/false,
   "specificityScore": 0-10,
   "productType": "what type of product",
-  "clarifications": [
-    "CRITICAL question 1",
-    "CRITICAL question 2"
-  ]
+  "clarifications": ["CRITICAL question 1", "CRITICAL question 2"]
 }`;
 
-        const clarificationCheck = await groq.chat.completions.create({
-            messages: [{ role: 'user', content: clarificationPrompt }],
-            model: SELECTED_MODEL,
-            temperature: 0.3,
-            max_tokens: 500,
-        });
-
-        const clarificationText = clarificationCheck.choices[0].message.content;
-        const clarificationMatch = clarificationText.match(/\{[\s\S]*\}/);
+        let clarityResponse = null;
         
-        if (!clarificationMatch) {
-            throw new Error('Could not parse clarity check');
+        try {
+            const clarificationCheck = await groq.chat.completions.create({
+                messages: [{ role: 'user', content: clarificationPrompt }],
+                model: SELECTED_MODEL,
+                temperature: 0.3,
+                max_tokens: 500,
+            });
+
+            const clarificationText = clarificationCheck.choices[0]?.message?.content;
+            if (!clarificationText) {
+                throw new Error('Empty response from clarity check');
+            }
+
+            const clarificationMatch = clarificationText.match(/\{[\s\S]*\}/);
+            if (!clarificationMatch) {
+                console.warn('Could not extract JSON from clarity check, proceeding with search');
+            } else {
+                try {
+                    clarityResponse = JSON.parse(clarificationMatch[0]);
+                } catch (parseError) {
+                    console.warn('Could not parse clarity JSON:', parseError.message);
+                }
+            }
+        } catch (clarityError) {
+            // If clarity check fails, log but continue with HS code search
+            console.warn('⚠️ Clarity check error, proceeding with search:', clarityError?.message);
         }
 
-        const clarityResponse = JSON.parse(clarificationMatch[0]);
-
         // If description is too vague, return clarification questions
-        if (clarityResponse.isTooVague || clarityResponse.specificityScore < 5) {
+        if (clarityResponse && (clarityResponse.isTooVague || clarityResponse.specificityScore < 5)) {
             console.log('⚠️ Description too vague, requesting clarifications');
             return res.json({
                 needsClarification: true,
                 message: `Please provide key details about this ${clarityResponse.productType || 'product'} to find the perfect HS code`,
-                clarificationQuestions: clarityResponse.clarifications || [
-                    'What are the key material/composition details?',
-                    'What is the primary intended use?'
-                ],
+                clarificationQuestions: Array.isArray(clarityResponse.clarifications) 
+                    ? clarityResponse.clarifications.slice(0, 3)
+                    : [
+                        'What are the key material/composition details?',
+                        'What is the primary intended use?'
+                    ],
                 hsCode: null,
                 description: null,
                 confidence: 0,
@@ -180,10 +211,10 @@ Respond with JSON:
             });
         }
 
-        // If description is specific enough, proceed with HS code search using Groq
+        // STEP 3: Search for HS code
         const prompt = `You are an expert Indian Customs Tariff classifier. Use ONLY the tariff codes provided below.
 
-PRODUCT: "${description}"
+PRODUCT: "${trimmedDescription}"
 
 TARIFF REFERENCE (use these exact codes):
 ${tariffContext}
@@ -197,8 +228,9 @@ IMPORTANT:
 - Use ONLY codes from the reference provided
 - Reasons must reference specific tariff descriptions
 - Related codes must be logically connected
+- Return ONLY valid JSON
 
-Return ONLY valid JSON:
+Return ONLY valid JSON (no markdown, no extra text):
 {
   "hsCode": "XXXXXXXX",
   "description": "Product name from tariff",
@@ -214,8 +246,6 @@ Return ONLY valid JSON:
   ]
 }`;
 
-        console.log('🔍 Searching for:', description);
-        
         const response = await groq.chat.completions.create({
             messages: [{ role: 'user', content: prompt }],
             model: SELECTED_MODEL,
@@ -223,37 +253,73 @@ Return ONLY valid JSON:
             max_tokens: 1000,
         });
 
-        const responseText = response.choices[0].message.content;
+        const responseText = response.choices[0]?.message?.content;
+        
+        if (!responseText) {
+            throw new Error('Empty response from HS code search');
+        }
 
         // Extract JSON from response
-        let jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
         
         if (!jsonMatch) {
+            console.error('Could not find JSON in response:', responseText.substring(0, 200));
             throw new Error('Invalid response format from AI');
         }
 
-        const parsedResponse = JSON.parse(jsonMatch[0]);
+        let parsedResponse;
+        try {
+            parsedResponse = JSON.parse(jsonMatch[0]);
+        } catch (parseError) {
+            console.error('JSON parse error:', parseError.message);
+            throw new Error('Could not parse AI response');
+        }
 
-        console.log('✅ Found HS Code:', parsedResponse.hsCode);
+        // Validate response structure
+        if (!parsedResponse.hsCode) {
+            throw new Error('No HS code in response');
+        }
+
+        const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        console.log(`✅ Found HS Code: ${parsedResponse.hsCode} (${processingTime}s)`);
 
         res.json({
             needsClarification: false,
-            hsCode: parsedResponse.hsCode || '00000000',
-            description: parsedResponse.description || description,
-            confidence: parsedResponse.confidence || 85,
-            reasons: parsedResponse.reasons || ['Based on tariff classification'],
-            relatedCodes: parsedResponse.relatedCodes || []
+            hsCode: String(parsedResponse.hsCode).padStart(8, '0'),
+            description: parsedResponse.description || trimmedDescription,
+            confidence: Math.min(100, Math.max(0, parsedResponse.confidence || 85)),
+            reasons: Array.isArray(parsedResponse.reasons) ? parsedResponse.reasons.slice(0, 3) : [],
+            relatedCodes: Array.isArray(parsedResponse.relatedCodes) ? parsedResponse.relatedCodes.slice(0, 2) : []
         });
 
     } catch (error) {
         console.error('❌ API Error:', error.message);
-        res.status(500).json({
-            error: error.message || 'Failed to search HS code',
+        
+        // Provide user-friendly error messages
+        let statusCode = 500;
+        let errorMessage = 'Failed to classify HS code';
+        
+        if (error.message?.includes('Cannot read')) {
+            errorMessage = 'Invalid data received. Please try again.';
+            statusCode = 400;
+        } else if (error.message?.includes('JSON')) {
+            errorMessage = 'Invalid response from AI. Please try again.';
+            statusCode = 500;
+        } else if (error.message?.includes('Rate limit')) {
+            errorMessage = 'Too many requests. Please wait a moment.';
+            statusCode = 429;
+        } else if (error.message?.includes('Service initializing')) {
+            errorMessage = 'Service initializing. Please try again.';
+            statusCode = 503;
+        }
+        
+        res.status(statusCode).json({
+            error: errorMessage,
             needsClarification: false,
-            hsCode: '00000000',
-            description: 'Error occurred',
+            hsCode: null,
+            description: null,
             confidence: 0,
-            reasons: ['Error processing request'],
+            reasons: [],
             relatedCodes: []
         });
     }

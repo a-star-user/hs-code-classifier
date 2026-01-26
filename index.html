@@ -1105,6 +1105,11 @@
             searchBtn.disabled = true;
 
             try {
+                // Validate input
+                if (!description || description.trim().length === 0) {
+                    throw new Error('Please enter a product description');
+                }
+
                 // Call Railway backend API
                 const BACKEND_URL = '/api/search-hs-code';
                 
@@ -1113,19 +1118,36 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ description })
+                    body: JSON.stringify({ description: description.trim() })
                 });
 
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Failed to search HS code');
+                    let errorMessage = 'Failed to search HS code';
+                    try {
+                        const error = await response.json();
+                        errorMessage = error.error || error.message || errorMessage;
+                    } catch (e) {
+                        errorMessage = `Server error: ${response.status}`;
+                    }
+                    throw new Error(errorMessage);
                 }
 
                 const data = await response.json();
-                displayResults(data);
+
+                // Validate response data
+                if (!data) {
+                    throw new Error('Invalid response from server');
+                }
+
+                // Check if clarification is needed
+                if (data.needsClarification) {
+                    displayClarifications(data);
+                } else {
+                    displayResults(data);
+                }
             } catch (error) {
-                console.error('Error:', error);
-                showError('Error: ' + (error.message || 'Failed to classify HS code. Please check if backend is running.'));
+                console.error('Search error:', error);
+                showError(error.message || 'Failed to classify HS code. Please try again.');
             } finally {
                 loading.classList.remove('active');
                 searchBtn.disabled = false;
@@ -1133,46 +1155,67 @@
         }
 
         function displayResults(data) {
-            // Check if clarifications are needed
-            if (data.needsClarification) {
-                displayClarifications(data);
+            // Validate data
+            if (!data || !data.hsCode) {
+                showError('Invalid response data');
                 return;
             }
 
-            lastHSCode = data.hsCode;
-            
-            // Primary HS Code
-            document.getElementById('hsCodeValue').textContent = data.hsCode;
-            document.getElementById('hsCodeDescription').textContent = data.description;
-            document.getElementById('confidenceBadge').textContent = `Confidence: ${data.confidence}%`;
+            try {
+                lastHSCode = data.hsCode;
+                
+                // Primary HS Code
+                const hsCodeValue = document.getElementById('hsCodeValue');
+                const hsCodeDescription = document.getElementById('hsCodeDescription');
+                const confidenceBadge = document.getElementById('confidenceBadge');
 
-            // Reasons
-            const reasonsList = document.getElementById('reasonsList');
-            reasonsList.innerHTML = data.reasons.map((reason, index) => `
-                <div class="reason-item">
-                    <div class="reason-title">Reason ${index + 1}</div>
-                    <div class="reason-text">${reason}</div>
-                </div>
-            `).join('');
+                if (hsCodeValue) hsCodeValue.textContent = data.hsCode;
+                if (hsCodeDescription) hsCodeDescription.textContent = data.description || 'Product classification';
+                if (confidenceBadge) confidenceBadge.textContent = `Confidence: ${data.confidence || 0}%`;
 
-            // Related Codes
-            const relatedContainer = document.getElementById('relatedCodesContainer');
-            relatedContainer.innerHTML = data.relatedCodes.map(code => `
-                <div class="related-card">
-                    <div class="related-code">${code.code}</div>
-                    <div class="related-description">${code.description}</div>
-                </div>
-            `).join('');
+                // Reasons
+                const reasonsList = document.getElementById('reasonsList');
+                if (reasonsList && data.reasons && Array.isArray(data.reasons)) {
+                    reasonsList.innerHTML = data.reasons.map((reason, index) => `
+                        <div class="reason-item">
+                            <div class="reason-title">Reason ${index + 1}</div>
+                            <div class="reason-text">${reason}</div>
+                        </div>
+                    `).join('');
+                }
 
-            resultsSection.classList.add('active');
-            
-            // Scroll to results
-            setTimeout(() => {
-                resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
+                // Related Codes
+                const relatedContainer = document.getElementById('relatedCodesContainer');
+                if (relatedContainer && data.relatedCodes && Array.isArray(data.relatedCodes)) {
+                    relatedContainer.innerHTML = data.relatedCodes.map(code => `
+                        <div class="related-card">
+                            <div class="related-code">${code.code || 'N/A'}</div>
+                            <div class="related-description">${code.description || ''}</div>
+                        </div>
+                    `).join('');
+                }
+
+                resultsSection.classList.add('active');
+                errorBox.classList.remove('active');
+                loading.classList.remove('active');
+                
+                // Scroll to results
+                setTimeout(() => {
+                    resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            } catch (error) {
+                console.error('Display results error:', error);
+                showError('Error displaying results: ' + error.message);
+            }
         }
 
         function displayClarifications(data) {
+            // Validate data
+            if (!data || !data.clarificationQuestions || !Array.isArray(data.clarificationQuestions)) {
+                showError('Invalid clarification data received');
+                return;
+            }
+
             // Show clarification questions with beautiful UI
             const clarificationsHTML = `
                 <div class="clarification-container">
@@ -1183,7 +1226,7 @@
                         </svg>
                         <h2>Perfect Your Search</h2>
                     </div>
-                    <p class="clarification-message">${data.message}</p>
+                    <p class="clarification-message">${data.message || 'Please provide additional details'}</p>
                     
                     <div class="clarification-form">
                         ${data.clarificationQuestions.map((question, index) => `
@@ -1214,64 +1257,115 @@
             
             resultsSection.innerHTML = clarificationsHTML;
             resultsSection.classList.add('active');
+            loading.classList.remove('active');
             
             // Add event listener to refine search button
-            document.getElementById('refineSearchBtn').addEventListener('click', async () => {
-                const refineBtn = document.getElementById('refineSearchBtn');
-                const inputs = Array.from(document.querySelectorAll('[id^="clarification-"]'));
-                
-                const details = inputs
-                    .map(input => input.value.trim())
-                    .filter(val => val.length > 0)
-                    .map((val, idx) => `${data.clarificationQuestions[idx]}: ${val}`)
-                    .join('; ');
-                
-                if (details.length === 0) {
-                    showError('Please answer at least one question to continue');
-                    return;
-                }
-                
-                // Disable button and show loading
-                refineBtn.disabled = true;
-                refineBtn.innerHTML = '<span>Searching...</span>';
-                
-                try {
-                    const originalDescription = document.getElementById('descriptionInput').value;
-                    const refinedDescription = originalDescription + ' [Additional Details: ' + details + ']';
-                    
-                    // Make API call directly with refined description
-                    const response = await fetch('/api/search-hs-code', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ description: refinedDescription })
-                    });
-                    
-                    const responseData = await response.json();
-                    
-                    if (!response.ok) {
-                        throw new Error(responseData.error || 'Search failed');
-                    }
-                    
-                    // Check if it still needs clarification
-                    if (responseData.needsClarification) {
-                        displayClarifications(responseData);
-                    } else {
-                        displayResults(responseData);
-                    }
-                } catch (error) {
-                    showError('Error: ' + error.message);
-                } finally {
-                    refineBtn.disabled = false;
-                    refineBtn.innerHTML = '<span>Find HS Code with Details</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>';
-                }
-            });
+            document.getElementById('refineSearchBtn').addEventListener('click', handleRefineSearch);
             
             // Auto-focus first input
             setTimeout(() => {
                 const firstInput = document.getElementById('clarification-0');
-                if (firstInput) firstInput.focus();
-                resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                if (firstInput) {
+                    firstInput.focus();
+                    resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
             }, 100);
+        }
+
+        async function handleRefineSearch() {
+            const refineBtn = document.getElementById('refineSearchBtn');
+            
+            try {
+                // Get all input values safely
+                const inputsNodeList = document.querySelectorAll('[id^="clarification-"]');
+                if (!inputsNodeList || inputsNodeList.length === 0) {
+                    showError('Form inputs not found. Please try again.');
+                    return;
+                }
+
+                const inputs = Array.from(inputsNodeList);
+                const answers = inputs.map(input => {
+                    if (!input || typeof input.value !== 'string') {
+                        return '';
+                    }
+                    return input.value.trim();
+                });
+
+                // Get the clarification questions from data attribute
+                const clarificationForm = document.querySelector('.clarification-form');
+                if (!clarificationForm) {
+                    showError('Form structure error. Please try again.');
+                    return;
+                }
+
+                // Extract questions from labels
+                const questionLabels = Array.from(clarificationForm.querySelectorAll('.form-label'));
+                const questions = questionLabels.map(label => {
+                    const labelText = label.textContent.trim();
+                    // Remove the number at the beginning
+                    return labelText.replace(/^\d+\s+/, '');
+                });
+
+                // Build details string from non-empty answers
+                const details = answers
+                    .map((answer, idx) => {
+                        if (answer.length > 0 && questions[idx]) {
+                            return `${questions[idx]}: ${answer}`;
+                        }
+                        return null;
+                    })
+                    .filter(item => item !== null)
+                    .join('; ');
+
+                if (details.length === 0) {
+                    showError('Please answer at least one question to continue');
+                    return;
+                }
+
+                // Disable button and show loading state
+                refineBtn.disabled = true;
+                refineBtn.innerHTML = '<span>Searching...</span>';
+                loading.classList.add('active');
+
+                // Get original description from input
+                const originalDescription = productInput.value.trim();
+                if (!originalDescription) {
+                    throw new Error('Original description not found');
+                }
+
+                const refinedDescription = `${originalDescription} [Additional Details: ${details}]`;
+
+                // Make API call with refined description
+                const response = await fetch('/api/search-hs-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ description: refinedDescription })
+                });
+
+                const responseData = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(responseData.error || `Server error: ${response.status}`);
+                }
+
+                // Handle response
+                if (responseData.needsClarification) {
+                    displayClarifications(responseData);
+                } else {
+                    displayResults(responseData);
+                }
+
+            } catch (error) {
+                console.error('Refine search error:', error);
+                showError('Error: ' + (error.message || 'Failed to process your request'));
+            } finally {
+                const refineBtn = document.getElementById('refineSearchBtn');
+                if (refineBtn) {
+                    refineBtn.disabled = false;
+                    refineBtn.innerHTML = '<span>Find HS Code with Details</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>';
+                }
+                loading.classList.remove('active');
+            }
         }
 
         function showError(message) {
