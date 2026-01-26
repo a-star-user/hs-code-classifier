@@ -40,6 +40,7 @@ console.log(`🤖 Using model: ${SELECTED_MODEL}`);
 
 let tariffContext = '';
 let tariffLoaded = false;
+let hsCodeList = []; // Store structured codes
 
 // Load and parse PDF on startup
 async function loadPDF() {
@@ -60,33 +61,64 @@ async function loadPDF() {
         const data = await pdfParse(pdfBuffer);
         console.log('✅ PDF parsed, pages:', data.numpages);
         
-        // Extract HS codes and their descriptions from PDF
+        // Extract structured HS codes from PDF
         const lines = data.text.split('\n');
         console.log('📄 Total lines in PDF:', lines.length);
         
-        let extractedCodes = [];
+        let currentCode = null;
+        let currentDescription = '';
         
         for (let line of lines) {
-            // Look for 8-digit codes (Indian HS codes)
-            const match = line.match(/^(\d{8})\s*[-–]\s*(.+)/);
-            if (match) {
-                extractedCodes.push(`${match[1]} - ${match[2].trim()}`);
+            const trimmed = line.trim();
+            
+            // Look for 8-digit HS codes at the start of a line
+            const codeMatch = trimmed.match(/^(\d{8})[\s\-–](.+)/);
+            
+            if (codeMatch) {
+                // Save previous code if exists
+                if (currentCode && currentDescription.trim()) {
+                    hsCodeList.push({
+                        code: currentCode,
+                        description: currentDescription.trim()
+                    });
+                }
+                
+                // Start new code
+                currentCode = codeMatch[1];
+                currentDescription = codeMatch[2].trim();
+            } else if (currentCode && trimmed && !trimmed.match(/^\d+$/) && trimmed.length > 2) {
+                // Continue description if not empty
+                if (currentDescription.length < 500) { // Limit description length
+                    currentDescription += ' ' + trimmed;
+                }
             }
         }
+
+        // Save last code
+        if (currentCode && currentDescription.trim()) {
+            hsCodeList.push({
+                code: currentCode,
+                description: currentDescription.trim()
+            });
+        }
+
+        console.log('🔍 Found', hsCodeList.length, 'HS codes');
         
-        console.log('🔍 Found', extractedCodes.length, 'HS codes in PDF');
-        
-        // Use extracted codes for better accuracy
-        if (extractedCodes.length > 0) {
-            tariffContext = extractedCodes.slice(0, 300).join('\n');
-            console.log('📊 Using first 300 codes, context size:', tariffContext.length, 'chars');
+        if (hsCodeList.length > 0) {
+            console.log('📋 Sample codes:');
+            hsCodeList.slice(0, 5).forEach(item => {
+                console.log(`  ${item.code}: ${item.description.substring(0, 60)}`);
+            });
+            
+            // Create tariff context from structured codes
+            tariffContext = hsCodeList.map(item => `${item.code} - ${item.description}`).join('\n');
         } else {
-            // If not enough codes, use raw text from PDF
-            console.log('⚠️ Could not extract structured codes, using raw text');
+            // Fallback: use raw PDF text
+            console.log('⚠️ No structured HS codes found, using raw PDF text');
             tariffContext = data.text.substring(0, 50000);
-            console.log('📊 Using raw text, context size:', tariffContext.length, 'chars');
         }
         
+        console.log('📊 Context size:', tariffContext.length, 'chars');
         tariffLoaded = true;
         console.log('✅ PDF ready for HS code search');
         
@@ -107,8 +139,21 @@ app.get('/api/health', (req, res) => {
         status: 'OK',
         model: SELECTED_MODEL,
         pdfLoaded: tariffLoaded,
+        hsCodesExtracted: hsCodeList.length,
         contextLength: tariffContext.length,
         timestamp: new Date().toISOString()
+    });
+});
+
+// Get HS codes list (for debugging)
+app.get('/api/hs-codes', (req, res) => {
+    if (!tariffLoaded) {
+        return res.status(503).json({ error: 'PDF not loaded yet' });
+    }
+    res.json({
+        total: hsCodeList.length,
+        sample: hsCodeList.slice(0, 20),
+        allCodes: hsCodeList.map(item => item.code)
     });
 });
 
@@ -151,36 +196,31 @@ app.post('/api/search-hs-code', async (req, res) => {
         // If confident → return results
         // If NOT confident → ask clarification questions
         
-        const prompt = `You are an expert customs classifier with 50+ years of experience classifying products into Indian Customs Tariff codes.
+        const prompt = `You are an expert customs classifier with 50+ years of experience.
 
 PRODUCT: "${trimmedDescription}"
 
-TARIFF CODES (use ONLY these):
+HS CODES TO SEARCH FROM:
 ${tariffContext}
 
-TASK:
+TASK (STRICT RULES):
 1. Find the BEST matching 8-digit HS code
-2. Give 3 reasons why (from the tariff)
-3. Suggest 2 related HS codes
+2. Provide 3 reasons (reference the tariff code descriptions)
+3. List 2 related codes
 4. Rate confidence (0-100)
 
-RULES:
-- If confidence >= 70: Return HS code + reasons + related codes + confidence
-- If confidence < 70: Return clarification questions instead
+CONFIDENCE DECISION:
+- 75-100: Clear product → Return HS code
+- Below 75: Need more info → Return clarification questions
 
-CONFIDENCE GUIDE:
-- 80-100: Very clear, specific product
-- 60-79: Fairly clear, minor details helpful
-- Below 60: Vague, need clarification
-
-FORMAT (use ONLY this JSON structure):
+FORMAT (ONLY this JSON, nothing else):
 {
-  "hsCode": "XXXXXXXX" or null,
+  "hsCode": "12345678" or null,
   "description": "product name" or null,
-  "confidence": number,
+  "confidence": 85,
   "reasons": ["reason1", "reason2", "reason3"] or [],
-  "relatedCodes": [{"code": "XXXXXXXX", "description": "name"}, ...] or [],
-  "clarificationQuestions": ["question1?", "question2?"] or null
+  "relatedCodes": [{"code": "12345678", "description": "name"}] or [],
+  "clarificationQuestions": null or ["question1?", "question2?"]
 }`;
 
         console.log('🚀 Calling Groq API...');
