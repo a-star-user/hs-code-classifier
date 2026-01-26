@@ -49,14 +49,21 @@ async function loadPDF() {
         
         if (!fs.existsSync(pdfPath)) {
             console.error('❌ PDF file not found at:', pdfPath);
+            console.error('Current directory:', __dirname);
+            console.error('Files in directory:', fs.readdirSync(__dirname).slice(0, 10));
             return;
         }
 
         const pdfBuffer = fs.readFileSync(pdfPath);
+        console.log('📦 PDF size:', (pdfBuffer.length / 1024 / 1024).toFixed(2) + 'MB');
+        
         const data = await pdfParse(pdfBuffer);
+        console.log('✅ PDF parsed, pages:', data.numpages);
         
         // Extract HS codes and their descriptions from PDF
         const lines = data.text.split('\n');
+        console.log('📄 Total lines in PDF:', lines.length);
+        
         let extractedCodes = [];
         
         for (let line of lines) {
@@ -67,23 +74,25 @@ async function loadPDF() {
             }
         }
         
-        // Use extracted codes for better accuracy
-        tariffContext = extractedCodes.slice(0, 300).join('\n');
+        console.log('🔍 Found', extractedCodes.length, 'HS codes in PDF');
         
-        if (tariffContext.length < 1000) {
+        // Use extracted codes for better accuracy
+        if (extractedCodes.length > 0) {
+            tariffContext = extractedCodes.slice(0, 300).join('\n');
+            console.log('📊 Using first 300 codes, context size:', tariffContext.length, 'chars');
+        } else {
             // If not enough codes, use raw text from PDF
+            console.log('⚠️ Could not extract structured codes, using raw text');
             tariffContext = data.text.substring(0, 50000);
+            console.log('📊 Using raw text, context size:', tariffContext.length, 'chars');
         }
         
         tariffLoaded = true;
-        
-        console.log('✅ PDF loaded successfully');
-        console.log('📊 Found HS codes:', extractedCodes.length);
-        console.log('📊 Context size:', tariffContext.length, 'characters');
-        console.log('📄 PDF pages:', data.numpages);
+        console.log('✅ PDF ready for HS code search');
         
     } catch (error) {
         console.error('❌ Error loading PDF:', error.message);
+        tariffLoaded = false;
     }
 }
 
@@ -218,7 +227,7 @@ FORMAT (use ONLY this JSON structure):
             console.log('⚠️ AI needs clarifications (confidence:', parsedResponse.confidence + '%)');
             return res.json({
                 needsClarification: true,
-                message: `I need a few specific details to find the PERFECT HS code for this ${trimmedDescription.split(' ')[0].toLowerCase()}`,
+                message: `I need specific details to find the perfect HS code`,
                 clarificationQuestions: parsedResponse.clarificationQuestions.slice(0, 3),
                 hsCode: null,
                 description: null,
@@ -237,14 +246,18 @@ FORMAT (use ONLY this JSON structure):
         const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
         console.log(`✅ Found HS Code: ${parsedResponse.hsCode} (confidence: ${parsedResponse.confidence}%, time: ${processingTime}s)`);
 
-        res.json({
+        // Build safe response
+        const finalResponse = {
             needsClarification: false,
-            hsCode: String(parsedResponse.hsCode).padStart(8, '0'),
-            description: parsedResponse.description || trimmedDescription,
-            confidence: Math.min(100, Math.max(0, parsedResponse.confidence || 85)),
+            hsCode: String(parsedResponse.hsCode || '').padStart(8, '0'),
+            description: (parsedResponse.description || trimmedDescription).substring(0, 500),
+            confidence: Math.min(100, Math.max(0, parseInt(parsedResponse.confidence) || 75)),
             reasons: Array.isArray(parsedResponse.reasons) ? parsedResponse.reasons.slice(0, 3) : [],
             relatedCodes: Array.isArray(parsedResponse.relatedCodes) ? parsedResponse.relatedCodes.slice(0, 2) : []
-        });
+        };
+
+        console.log('✅ Sending response - HS Code:', finalResponse.hsCode);
+        res.json(finalResponse);
 
     } catch (error) {
         console.error('❌ CRITICAL API Error:', error.message);
