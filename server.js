@@ -108,7 +108,7 @@ app.post('/api/search-hs-code', async (req, res) => {
     const startTime = Date.now();
     
     try {
-        const { description } = req.body;
+        const { description, isFollowUp } = req.body;
 
         // STEP 1: Validate input
         if (!description || typeof description !== 'string' || description.trim().length === 0) {
@@ -136,113 +136,66 @@ app.post('/api/search-hs-code', async (req, res) => {
         }
 
         const trimmedDescription = description.trim();
-        console.log('🔍 Processing:', trimmedDescription.substring(0, 100));
+        console.log('🔍 Processing:', trimmedDescription.substring(0, 100), isFollowUp ? '(Follow-up)' : '(Initial)');
 
-        // STEP 2: Check if description is too vague
-        const clarificationPrompt = `You are a customs expert analyzing a product description for Indian HS code classification.
-
-Product Description: "${trimmedDescription}"
-
-Determine if this description has enough details for accurate classification.
-
-IMPORTANT: Only ask 2-3 CRITICAL questions that will directly lead to determining the EXACT HS code. Do NOT ask generic questions. Ask ONLY what's necessary.
-
-Example: 
-- If "fabric" → Ask: "What is the fiber content (cotton, polyester, wool, blend)?" and "Is it woven or knitted?"
-- If "machine" → Ask: "What specific type of machine (printing, textile, packaging)?"
-
-Generate questions specific to THIS exact product. Keep it minimal and essential.
-
-Respond with ONLY valid JSON (no markdown):
-{
-  "isTooVague": true/false,
-  "specificityScore": 0-10,
-  "productType": "what type of product",
-  "clarifications": ["CRITICAL question 1", "CRITICAL question 2"]
-}`;
-
-        let clarityResponse = null;
+        // SMART FLOW: Always try to find HS code first
+        // If confident → return results
+        // If NOT confident → ask clarification questions
         
-        try {
-            const clarificationCheck = await groq.chat.completions.create({
-                messages: [{ role: 'user', content: clarificationPrompt }],
-                model: SELECTED_MODEL,
-                temperature: 0.3,
-                max_tokens: 500,
-            });
+        const prompt = `You are an expert customs classifier with 50+ years of experience in the Indian Customs Tariff system. You've classified thousands of products into the perfect HS codes.
 
-            const clarificationText = clarificationCheck.choices[0]?.message?.content;
-            if (!clarificationText) {
-                throw new Error('Empty response from clarity check');
-            }
+PRODUCT DESCRIPTION: "${trimmedDescription}"
 
-            const clarificationMatch = clarificationText.match(/\{[\s\S]*\}/);
-            if (!clarificationMatch) {
-                console.warn('Could not extract JSON from clarity check, proceeding with search');
-            } else {
-                try {
-                    clarityResponse = JSON.parse(clarificationMatch[0]);
-                } catch (parseError) {
-                    console.warn('Could not parse clarity JSON:', parseError.message);
-                }
-            }
-        } catch (clarityError) {
-            // If clarity check fails, log but continue with HS code search
-            console.warn('⚠️ Clarity check error, proceeding with search:', clarityError?.message);
-        }
-
-        // If description is too vague, return clarification questions
-        if (clarityResponse && (clarityResponse.isTooVague || clarityResponse.specificityScore < 5)) {
-            console.log('⚠️ Description too vague, requesting clarifications');
-            return res.json({
-                needsClarification: true,
-                message: `Please provide key details about this ${clarityResponse.productType || 'product'} to find the perfect HS code`,
-                clarificationQuestions: Array.isArray(clarityResponse.clarifications) 
-                    ? clarityResponse.clarifications.slice(0, 3)
-                    : [
-                        'What are the key material/composition details?',
-                        'What is the primary intended use?'
-                    ],
-                hsCode: null,
-                description: null,
-                confidence: 0,
-                reasons: [],
-                relatedCodes: []
-            });
-        }
-
-        // STEP 3: Search for HS code
-        const prompt = `You are an expert Indian Customs Tariff classifier. Use ONLY the tariff codes provided below.
-
-PRODUCT: "${trimmedDescription}"
-
-TARIFF REFERENCE (use these exact codes):
+TARIFF REFERENCE (search ONLY from these codes):
 ${tariffContext}
 
-INSTRUCTIONS:
-1. Find the BEST matching 8-digit HS code from the reference above
-2. Explain 3 SPECIFIC reasons from the tariff definition why this code matches
-3. Suggest 2 RELATED 8-digit HS codes for complementary/similar products
+YOUR TASK:
+1. Find the BEST matching 8-digit HS code from the tariff above
+2. Provide 3 SPECIFIC reasons why this code matches (reference the tariff definitions)
+3. Suggest 2 RELATED HS codes for similar/complementary products
+4. Rate your CONFIDENCE in this classification (0-100)
 
-IMPORTANT: 
-- Use ONLY codes from the reference provided
-- Reasons must reference specific tariff descriptions
-- Related codes must be logically connected
+CONFIDENCE EVALUATION:
+- 80-100: Extremely clear and specific product description. You are certain.
+- 60-79: Fairly clear but could benefit from minor details
+- Below 60: Product description is vague or ambiguous. You need clarification.
+
+IF YOUR CONFIDENCE IS BELOW 70%, include these 2-3 clarification questions that would help you find the PERFECT HS code (NOT generic questions - be very specific to THIS product).
+
+IMPORTANT RULES:
+- Be confident! With your expertise, you can usually classify products from descriptions
+- ONLY ask clarification questions if you're genuinely uncertain (confidence < 70%)
+- Use ONLY codes from the tariff reference provided
+- Reasons must reference tariff descriptions
 - Return ONLY valid JSON
 
-Return ONLY valid JSON (no markdown, no extra text):
+Return JSON in this format:
 {
   "hsCode": "XXXXXXXX",
   "description": "Product name from tariff",
   "confidence": 85,
   "reasons": [
-    "Specific reason from tariff definition",
-    "Another reason from tariff",
+    "Specific reason from tariff",
+    "Another reason from tariff", 
     "Third reason from tariff"
   ],
   "relatedCodes": [
-    { "code": "XXXXXXXX", "description": "Related product name" },
+    { "code": "XXXXXXXX", "description": "Related product" },
     { "code": "XXXXXXXX", "description": "Another related product" }
+  ],
+  "clarificationQuestions": null
+}
+
+OR if confidence < 70%, include clarification questions:
+{
+  "hsCode": null,
+  "description": null,
+  "confidence": 45,
+  "reasons": [],
+  "relatedCodes": [],
+  "clarificationQuestions": [
+    "Specific clarification Q1 for THIS product?",
+    "Specific clarification Q2 for THIS product?"
   ]
 }`;
 
@@ -250,7 +203,7 @@ Return ONLY valid JSON (no markdown, no extra text):
             messages: [{ role: 'user', content: prompt }],
             model: SELECTED_MODEL,
             temperature: 0.2,
-            max_tokens: 1000,
+            max_tokens: 1200,
         });
 
         const responseText = response.choices[0]?.message?.content;
@@ -275,13 +228,28 @@ Return ONLY valid JSON (no markdown, no extra text):
             throw new Error('Could not parse AI response');
         }
 
-        // Validate response structure
+        // If AI is asking clarification questions (confidence < 70)
+        if (parsedResponse.clarificationQuestions && Array.isArray(parsedResponse.clarificationQuestions) && parsedResponse.clarificationQuestions.length > 0) {
+            console.log('⚠️ AI needs clarifications (confidence:', parsedResponse.confidence + '%)');
+            return res.json({
+                needsClarification: true,
+                message: `I need a few specific details to find the PERFECT HS code for this ${trimmedDescription.split(' ')[0].toLowerCase()}`,
+                clarificationQuestions: parsedResponse.clarificationQuestions.slice(0, 3),
+                hsCode: null,
+                description: null,
+                confidence: parsedResponse.confidence || 0,
+                reasons: [],
+                relatedCodes: []
+            });
+        }
+
+        // Validate response structure - AI found an HS code
         if (!parsedResponse.hsCode) {
-            throw new Error('No HS code in response');
+            throw new Error('No HS code found in response');
         }
 
         const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log(`✅ Found HS Code: ${parsedResponse.hsCode} (${processingTime}s)`);
+        console.log(`✅ Found HS Code: ${parsedResponse.hsCode} (confidence: ${parsedResponse.confidence}%, time: ${processingTime}s)`);
 
         res.json({
             needsClarification: false,

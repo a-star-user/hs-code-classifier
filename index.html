@@ -1284,14 +1284,8 @@
                 }
 
                 const inputs = Array.from(inputsNodeList);
-                const answers = inputs.map(input => {
-                    if (!input || typeof input.value !== 'string') {
-                        return '';
-                    }
-                    return input.value.trim();
-                });
-
-                // Get the clarification questions from data attribute
+                
+                // Get the clarification form to extract questions
                 const clarificationForm = document.querySelector('.clarification-form');
                 if (!clarificationForm) {
                     showError('Form structure error. Please try again.');
@@ -1306,40 +1300,48 @@
                     return labelText.replace(/^\d+\s+/, '');
                 });
 
-                // Build details string from non-empty answers
-                const details = answers
-                    .map((answer, idx) => {
-                        if (answer.length > 0 && questions[idx]) {
-                            return `${questions[idx]}: ${answer}`;
-                        }
-                        return null;
-                    })
-                    .filter(item => item !== null)
-                    .join('; ');
+                // Collect answers with their corresponding questions
+                const answers = inputs.map((input, idx) => {
+                    if (!input || typeof input.value !== 'string') {
+                        return '';
+                    }
+                    const answer = input.value.trim();
+                    if (answer.length > 0) {
+                        return `${questions[idx]}: ${answer}`;
+                    }
+                    return null;
+                }).filter(item => item !== null);
 
-                if (details.length === 0) {
+                if (answers.length === 0) {
                     showError('Please answer at least one question to continue');
                     return;
                 }
 
-                // Disable button and show loading state
-                refineBtn.disabled = true;
-                refineBtn.innerHTML = '<span>Searching...</span>';
-                loading.classList.add('active');
-
-                // Get original description from input
+                // Get original description
                 const originalDescription = productInput.value.trim();
                 if (!originalDescription) {
                     throw new Error('Original description not found');
                 }
 
-                const refinedDescription = `${originalDescription} [Additional Details: ${details}]`;
+                // Build refined description with all answers
+                const answersText = answers.join('. ');
+                const refinedDescription = `${originalDescription}. [Additional Details: ${answersText}]`;
+
+                // Disable button and show loading state
+                refineBtn.disabled = true;
+                refineBtn.innerHTML = '<span>Searching with Your Answers...</span>';
+                loading.classList.add('active');
+                resultsSection.classList.remove('active');
+                errorBox.classList.remove('active');
 
                 // Make API call with refined description
                 const response = await fetch('/api/search-hs-code', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ description: refinedDescription })
+                    body: JSON.stringify({ 
+                        description: refinedDescription,
+                        isFollowUp: true
+                    })
                 });
 
                 const responseData = await response.json();
@@ -1348,10 +1350,12 @@
                     throw new Error(responseData.error || `Server error: ${response.status}`);
                 }
 
-                // Handle response
+                // Handle response - should NOT ask questions again since we provided answers
                 if (responseData.needsClarification) {
+                    // This shouldn't happen on follow-up, but if AI still has questions, show them
                     displayClarifications(responseData);
                 } else {
+                    // Show the final HS code results
                     displayResults(responseData);
                 }
 
