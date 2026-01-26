@@ -35,12 +35,12 @@ if (!apiKey) {
 const groq = new Groq({ apiKey: apiKey });
 
 // Use the latest available Groq model - try multiple in order of reliability
-// Use correct Groq model names
-let SELECTED_MODEL = 'llama-3.1-8b-instant'; 
+// Use Groq's native models first (most reliable), then Meta's llama models
+let SELECTED_MODEL = 'groq/compound'; 
 const BACKUP_MODELS = [
-    'llama-3.3-70b-versatile',
-    'mixtral-8x7b-32768',
-    'llama-2-70b-chat'
+    'groq/compound-mini',
+    'llama-3.1-8b-instant',
+    'llama-3.3-70b-versatile'
 ];
 
 console.log(`🤖 Attempting to use model: ${SELECTED_MODEL}`);
@@ -271,7 +271,12 @@ FORMAT (ONLY this JSON, nothing else):
                 max_tokens: 1200,
             });
         } catch (apiError) {
-            console.error('❌ Primary model failed:', SELECTED_MODEL, apiError.message);
+            console.error('❌ Primary model failed:', SELECTED_MODEL);
+            console.error('❌ Error message:', apiError.message);
+            console.error('❌ Error status:', apiError.status);
+            if (apiError.response?.data) {
+                console.error('❌ Groq response:', JSON.stringify(apiError.response.data));
+            }
             
             // Try backup models
             for (let backupModel of BACKUP_MODELS) {
