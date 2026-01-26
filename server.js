@@ -34,8 +34,8 @@ if (!apiKey) {
 
 const groq = new Groq({ apiKey: apiKey });
 
-// Use currently available Groq model
-const SELECTED_MODEL = 'gemma2-9b-it';
+// Use the latest Groq model (confirmed available)
+const SELECTED_MODEL = 'llama-3.3-70b-versatile';
 console.log(`🤖 Using model: ${SELECTED_MODEL}`);
 
 let tariffContext = '';
