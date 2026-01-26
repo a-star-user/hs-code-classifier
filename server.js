@@ -34,9 +34,16 @@ if (!apiKey) {
 
 const groq = new Groq({ apiKey: apiKey });
 
-// Use the latest Groq model (confirmed available)
-const SELECTED_MODEL = 'llama-3.3-70b-versatile';
-console.log(`🤖 Using model: ${SELECTED_MODEL}`);
+// Use the latest available Groq model - try multiple in order of reliability
+let SELECTED_MODEL = 'llama-3.1-8b-instant'; // Smaller, faster, more stable
+const BACKUP_MODELS = [
+    'llama-3.3-70b-versatile',
+    'mixtral-8x7b-32768',
+    'llama2-70b-4096',
+    'gemma2-9b-it'
+];
+
+console.log(`🤖 Attempting to use model: ${SELECTED_MODEL}`);
 
 let tariffContext = '';
 let tariffLoaded = false;
@@ -157,6 +164,34 @@ app.get('/api/hs-codes', (req, res) => {
     });
 });
 
+// Check available Groq models
+app.get('/api/groq-models', async (req, res) => {
+    try {
+        console.log('🔍 Fetching available Groq models...');
+        
+        const response = await groq.models.list();
+        const models = response.data || [];
+        
+        console.log('✅ Available models:', models.map(m => m.id));
+        
+        res.json({
+            availableModels: models.map(m => ({
+                id: m.id,
+                owned_by: m.owned_by
+            })),
+            currentModel: SELECTED_MODEL,
+            totalModels: models.length
+        });
+    } catch (error) {
+        console.error('❌ Error fetching models:', error.message);
+        res.status(500).json({
+            error: 'Could not fetch available models',
+            message: error.message,
+            currentModel: SELECTED_MODEL
+        });
+    }
+});
+
 // Search HS Code using PDF + Groq
 app.post('/api/search-hs-code', async (req, res) => {
     const startTime = Date.now();
@@ -225,14 +260,44 @@ FORMAT (ONLY this JSON, nothing else):
 
         console.log('🚀 Calling Groq API...');
 
-        const response = await groq.chat.completions.create({
-            messages: [{ role: 'user', content: prompt }],
-            model: SELECTED_MODEL,
-            temperature: 0.2,
-            max_tokens: 1200,
-        });
+        let response;
+        let usedModel = SELECTED_MODEL;
+        
+        try {
+            response = await groq.chat.completions.create({
+                messages: [{ role: 'user', content: prompt }],
+                model: SELECTED_MODEL,
+                temperature: 0.2,
+                max_tokens: 1200,
+            });
+        } catch (apiError) {
+            console.error('❌ Primary model failed:', SELECTED_MODEL, apiError.message);
+            
+            // Try backup models
+            for (let backupModel of BACKUP_MODELS) {
+                try {
+                    console.log('🔄 Trying backup model:', backupModel);
+                    response = await groq.chat.completions.create({
+                        messages: [{ role: 'user', content: prompt }],
+                        model: backupModel,
+                        temperature: 0.2,
+                        max_tokens: 1200,
+                    });
+                    usedModel = backupModel;
+                    console.log('✅ Backup model worked:', backupModel);
+                    break;
+                } catch (backupError) {
+                    console.warn('⚠️ Backup model failed:', backupModel);
+                    continue;
+                }
+            }
+            
+            if (!response) {
+                throw new Error('All Groq models failed: ' + apiError.message);
+            }
+        }
 
-        const responseText = response.choices[0]?.message?.content;
+        console.log('📡 Using model:', usedModel);
         
         if (!responseText) {
             console.error('❌ Empty response from Groq');
@@ -300,10 +365,41 @@ FORMAT (ONLY this JSON, nothing else):
         res.json(finalResponse);
 
     } catch (error) {
-        console.error('❌ CRITICAL API Error:', error.message);
-        console.error('❌ Stack:', error.stack);
+        console.error('❌ CRITICAL ERROR:', error.message);
+        console.error('❌ Error type:', error.constructor.name);
+        console.error('❌ Stack:', error.stack?.substring(0, 500));
         
-        // Provide detailed error messages for debugging
+        // Detailed error logging
+        if (error.response) {
+            console.error('❌ API Response Status:', error.response.status);
+            console.error('❌ API Response Body:', JSON.stringify(error.response.data));
+        }
+        
+        if (error.status === 401) {
+            return res.status(401).json({
+                error: 'Invalid API key. Please check GROQ_API_KEY environment variable.',
+                needsClarification: false,
+                hsCode: null,
+                description: null,
+                confidence: 0,
+                reasons: [],
+                relatedCodes: []
+            });
+        }
+        
+        if (error.status === 404 || error.message?.includes('model')) {
+            return res.status(400).json({
+                error: 'Model not available. Check available models at /api/groq-models',
+                currentModel: SELECTED_MODEL,
+                needsClarification: false,
+                hsCode: null,
+                description: null,
+                confidence: 0,
+                reasons: [],
+                relatedCodes: []
+            });
+        }
+        
         let statusCode = 500;
         let errorMessage = 'Failed to classify HS code';
         
@@ -311,16 +407,16 @@ FORMAT (ONLY this JSON, nothing else):
             errorMessage = 'AI service did not respond. Please try again.';
             statusCode = 503;
         } else if (error.message?.includes('JSON')) {
-            errorMessage = 'AI response was invalid format. Retrying...';
+            errorMessage = 'AI response format was invalid.';
             statusCode = 500;
         } else if (error.message?.includes('No HS code')) {
             errorMessage = 'Could not determine HS code. Try more specific description.';
             statusCode = 400;
-        } else if (error.message?.includes('Rate limit') || error.message?.includes('429')) {
-            errorMessage = 'Too many requests. Wait a moment and try again.';
+        } else if (error.message?.includes('Rate limit') || error.status === 429) {
+            errorMessage = 'Too many requests. Please wait a moment.';
             statusCode = 429;
-        } else if (error.message?.includes('API')) {
-            errorMessage = 'AI API error. Service may be temporarily unavailable.';
+        } else if (error.message?.includes('API') || error.message?.includes('network')) {
+            errorMessage = 'API connection issue. Retrying...';
             statusCode = 503;
         }
         
@@ -334,6 +430,65 @@ FORMAT (ONLY this JSON, nothing else):
             confidence: 0,
             reasons: [],
             relatedCodes: []
+        });
+    }
+});
+
+// Debug endpoint: Check PDF and extracted codes
+app.get('/api/health', (req, res) => {
+    const health = {
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        environment: {
+            nodeVersion: process.version,
+            apiKey: process.env.GROQ_API_KEY ? 'SET' : 'NOT SET',
+            pdfLoaded: tariffLoaded,
+            hsCodesExtracted: hsCodeList.length,
+            contextLength: tariffContext?.length || 0,
+            selectedModel: SELECTED_MODEL,
+            backupModels: BACKUP_MODELS
+        }
+    };
+    res.json(health);
+});
+
+// Debug: Show sample of extracted HS codes
+app.get('/api/hs-codes', (req, res) => {
+    const sampleSize = 20;
+    const sample = hsCodeList.slice(0, sampleSize);
+    const allCodes = hsCodeList.map(item => item.code);
+    
+    res.json({
+        totalExtracted: hsCodeList.length,
+        sampleSize: sample.length,
+        sample: sample,
+        allCodes: allCodes,
+        contextPreview: tariffContext?.substring(0, 500) + '...'
+    });
+});
+
+// Debug: List available Groq models
+app.get('/api/groq-models', async (req, res) => {
+    try {
+        const models = await groq.models.list();
+        const modelList = models.data.map(m => ({
+            id: m.id,
+            created: m.created,
+            owned_by: m.owned_by
+        }));
+        
+        res.json({
+            availableModels: modelList,
+            totalModels: modelList.length,
+            selectedPrimary: SELECTED_MODEL,
+            backups: BACKUP_MODELS,
+            message: 'Use any of these model IDs in the application'
+        });
+    } catch (error) {
+        console.error('❌ Failed to list Groq models:', error.message);
+        res.status(500).json({
+            error: 'Could not fetch model list: ' + error.message,
+            message: 'Check if GROQ_API_KEY is valid'
         });
     }
 });
