@@ -142,62 +142,39 @@ app.post('/api/search-hs-code', async (req, res) => {
         // If confident → return results
         // If NOT confident → ask clarification questions
         
-        const prompt = `You are an expert customs classifier with 50+ years of experience in the Indian Customs Tariff system. You've classified thousands of products into the perfect HS codes.
+        const prompt = `You are an expert customs classifier with 50+ years of experience classifying products into Indian Customs Tariff codes.
 
-PRODUCT DESCRIPTION: "${trimmedDescription}"
+PRODUCT: "${trimmedDescription}"
 
-TARIFF REFERENCE (search ONLY from these codes):
+TARIFF CODES (use ONLY these):
 ${tariffContext}
 
-YOUR TASK:
-1. Find the BEST matching 8-digit HS code from the tariff above
-2. Provide 3 SPECIFIC reasons why this code matches (reference the tariff definitions)
-3. Suggest 2 RELATED HS codes for similar/complementary products
-4. Rate your CONFIDENCE in this classification (0-100)
+TASK:
+1. Find the BEST matching 8-digit HS code
+2. Give 3 reasons why (from the tariff)
+3. Suggest 2 related HS codes
+4. Rate confidence (0-100)
 
-CONFIDENCE EVALUATION:
-- 80-100: Extremely clear and specific product description. You are certain.
-- 60-79: Fairly clear but could benefit from minor details
-- Below 60: Product description is vague or ambiguous. You need clarification.
+RULES:
+- If confidence >= 70: Return HS code + reasons + related codes + confidence
+- If confidence < 70: Return clarification questions instead
 
-IF YOUR CONFIDENCE IS BELOW 70%, include these 2-3 clarification questions that would help you find the PERFECT HS code (NOT generic questions - be very specific to THIS product).
+CONFIDENCE GUIDE:
+- 80-100: Very clear, specific product
+- 60-79: Fairly clear, minor details helpful
+- Below 60: Vague, need clarification
 
-IMPORTANT RULES:
-- Be confident! With your expertise, you can usually classify products from descriptions
-- ONLY ask clarification questions if you're genuinely uncertain (confidence < 70%)
-- Use ONLY codes from the tariff reference provided
-- Reasons must reference tariff descriptions
-- Return ONLY valid JSON
-
-Return JSON in this format:
+FORMAT (use ONLY this JSON structure):
 {
-  "hsCode": "XXXXXXXX",
-  "description": "Product name from tariff",
-  "confidence": 85,
-  "reasons": [
-    "Specific reason from tariff",
-    "Another reason from tariff", 
-    "Third reason from tariff"
-  ],
-  "relatedCodes": [
-    { "code": "XXXXXXXX", "description": "Related product" },
-    { "code": "XXXXXXXX", "description": "Another related product" }
-  ],
-  "clarificationQuestions": null
-}
-
-OR if confidence < 70%, include clarification questions:
-{
-  "hsCode": null,
-  "description": null,
-  "confidence": 45,
-  "reasons": [],
-  "relatedCodes": [],
-  "clarificationQuestions": [
-    "Specific clarification Q1 for THIS product?",
-    "Specific clarification Q2 for THIS product?"
-  ]
+  "hsCode": "XXXXXXXX" or null,
+  "description": "product name" or null,
+  "confidence": number,
+  "reasons": ["reason1", "reason2", "reason3"] or [],
+  "relatedCodes": [{"code": "XXXXXXXX", "description": "name"}, ...] or [],
+  "clarificationQuestions": ["question1?", "question2?"] or null
 }`;
+
+        console.log('🚀 Calling Groq API...');
 
         const response = await groq.chat.completions.create({
             messages: [{ role: 'user', content: prompt }],
@@ -209,24 +186,32 @@ OR if confidence < 70%, include clarification questions:
         const responseText = response.choices[0]?.message?.content;
         
         if (!responseText) {
-            throw new Error('Empty response from HS code search');
+            console.error('❌ Empty response from Groq');
+            throw new Error('Empty response from AI');
         }
 
-        // Extract JSON from response
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        console.log('📝 Raw response (first 300 chars):', responseText.substring(0, 300));
+
+        // Extract JSON from response - be more flexible
+        let jsonMatch = responseText.match(/\{[\s\S]*\}/);
         
         if (!jsonMatch) {
-            console.error('Could not find JSON in response:', responseText.substring(0, 200));
-            throw new Error('Invalid response format from AI');
+            // Try to find JSON between other text
+            console.error('❌ No JSON found in response. Full response:', responseText);
+            throw new Error('AI response format invalid');
         }
 
         let parsedResponse;
         try {
             parsedResponse = JSON.parse(jsonMatch[0]);
+            console.log('✅ Successfully parsed JSON');
         } catch (parseError) {
-            console.error('JSON parse error:', parseError.message);
-            throw new Error('Could not parse AI response');
+            console.error('❌ JSON parse failed:', parseError.message);
+            console.error('❌ Attempted to parse:', jsonMatch[0].substring(0, 200));
+            throw new Error('Could not parse AI response: ' + parseError.message);
         }
+
+        console.log('📊 Parsed response confidence:', parsedResponse.confidence);
 
         // If AI is asking clarification questions (confidence < 70)
         if (parsedResponse.clarificationQuestions && Array.isArray(parsedResponse.clarificationQuestions) && parsedResponse.clarificationQuestions.length > 0) {
@@ -245,7 +230,8 @@ OR if confidence < 70%, include clarification questions:
 
         // Validate response structure - AI found an HS code
         if (!parsedResponse.hsCode) {
-            throw new Error('No HS code found in response');
+            console.error('❌ No HS code in parsed response:', JSON.stringify(parsedResponse).substring(0, 200));
+            throw new Error('AI did not return an HS code');
         }
 
         const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -261,25 +247,31 @@ OR if confidence < 70%, include clarification questions:
         });
 
     } catch (error) {
-        console.error('❌ API Error:', error.message);
+        console.error('❌ CRITICAL API Error:', error.message);
+        console.error('❌ Stack:', error.stack);
         
-        // Provide user-friendly error messages
+        // Provide detailed error messages for debugging
         let statusCode = 500;
         let errorMessage = 'Failed to classify HS code';
         
-        if (error.message?.includes('Cannot read')) {
-            errorMessage = 'Invalid data received. Please try again.';
-            statusCode = 400;
+        if (error.message?.includes('Empty response')) {
+            errorMessage = 'AI service did not respond. Please try again.';
+            statusCode = 503;
         } else if (error.message?.includes('JSON')) {
-            errorMessage = 'Invalid response from AI. Please try again.';
+            errorMessage = 'AI response was invalid format. Retrying...';
             statusCode = 500;
-        } else if (error.message?.includes('Rate limit')) {
-            errorMessage = 'Too many requests. Please wait a moment.';
+        } else if (error.message?.includes('No HS code')) {
+            errorMessage = 'Could not determine HS code. Try more specific description.';
+            statusCode = 400;
+        } else if (error.message?.includes('Rate limit') || error.message?.includes('429')) {
+            errorMessage = 'Too many requests. Wait a moment and try again.';
             statusCode = 429;
-        } else if (error.message?.includes('Service initializing')) {
-            errorMessage = 'Service initializing. Please try again.';
+        } else if (error.message?.includes('API')) {
+            errorMessage = 'AI API error. Service may be temporarily unavailable.';
             statusCode = 503;
         }
+        
+        console.error('📨 Sending error response:', statusCode, errorMessage);
         
         res.status(statusCode).json({
             error: errorMessage,
